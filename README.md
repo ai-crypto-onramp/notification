@@ -1,6 +1,7 @@
 # Notification
 
 ![CI](https://github.com/ai-crypto-onramp/notification/actions/workflows/ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/ai-crypto-onramp/notification/branch/main/graph/badge.svg)](https://codecov.io/gh/ai-crypto-onramp/notification)
 
 Email/SMS/push + partner webhooks for tx status.
 

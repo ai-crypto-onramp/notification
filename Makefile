@@ -19,4 +19,4 @@ docker-run:
 	docker run --rm -p 8080:8080 ai-crypto-onramp/notification
 
 clean:
-	rm -rf dist node_modules
+	rm -rf dist node_modules coverage
