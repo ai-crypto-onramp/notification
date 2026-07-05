@@ -1,5 +1,7 @@
 # Notification
 
+![CI](https://github.com/ai-crypto-onramp/notification/actions/workflows/ci.yml/badge.svg)
+
 Email/SMS/push + partner webhooks for tx status.
 
 ## Overview / Responsibilities
