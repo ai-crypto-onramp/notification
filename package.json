@@ -4,17 +4,21 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy:migrations",
+    "copy:migrations": "node --input-type=module -e \"import{cpSync as c}from'node:fs';c('src/db/migrations','dist/db/migrations',{recursive:true})\"",
     "start": "node dist/index.js",
+    "migrate": "node dist/db/migrate.js",
     "test": "vitest run --coverage",
     "lint": "eslint . --ext .ts",
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "fastify": "^4.26.0"
+    "fastify": "^4.26.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.2",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
