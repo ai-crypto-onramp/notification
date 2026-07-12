@@ -6,7 +6,7 @@ app.get("/healthz", async () => {
   return { status: "ok" };
 });
 
-const start = async () => {
+export const start = async () => {
   const port = Number(process.env.PORT ?? 8080);
   try {
     await app.listen({ port, host: "0.0.0.0" });
