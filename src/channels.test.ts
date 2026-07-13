@@ -6,6 +6,7 @@ import { TokenBucket } from "./ratelimit.js";
 import { emailChannel, smsChannel, pushChannel, webhookChannel } from "./channels.js";
 import { ingestEvent, _resetQueue } from "./pipeline.js";
 import { templateService } from "./templates.js";
+import { consumer, inMemoryBus } from "./consumer.js";
 
 describe("Channels (in-memory sends)", () => {
   beforeEach(() => {
@@ -28,9 +29,9 @@ describe("Channels (in-memory sends)", () => {
     expect(store.attempts.length).toBe(1);
   });
 
-  it("sms channel records a delivery attempt", async () => {
+  it("sms channel records a delivery attempt (US via SNS)", async () => {
     const r = await smsChannel.send({
-      to: "+1",
+      to: "+15555550100",
       subject: "",
       text: "",
       html: "",
@@ -38,11 +39,25 @@ describe("Channels (in-memory sends)", () => {
       event_type: "tx.created",
       notification_id: "n2",
     });
-    expect(r.provider).toBe("sns-stub");
+    expect(r.provider).toBe("sns");
     expect(store.attempts.length).toBe(1);
   });
 
-  it("push channel records a delivery attempt", async () => {
+  it("sms channel routes international numbers through Twilio", async () => {
+    const r = await smsChannel.send({
+      to: "+447700900123",
+      subject: "",
+      text: "",
+      html: "",
+      short: "hi",
+      event_type: "tx.created",
+      notification_id: "n2b",
+    });
+    expect(r.provider).toBe("twilio");
+  });
+
+  it("push channel records a delivery attempt (Android via FCM)", async () => {
+    pushChannel.registerDevice("token", "a-long-fcm-token-string-xyz");
     const r = await pushChannel.send({
       to: "token",
       subject: "",
@@ -52,7 +67,36 @@ describe("Channels (in-memory sends)", () => {
       event_type: "tx.confirmed",
       notification_id: "n3",
     });
-    expect(r.provider).toBe("fcm-stub");
+    expect(r.provider).toBe("fcm");
+  });
+
+  it("push channel routes iOS tokens through APNS", async () => {
+    const iosToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    pushChannel.registerDevice("ios-recipient", iosToken);
+    const r = await pushChannel.send({
+      to: "ios-recipient",
+      subject: "",
+      text: "",
+      html: "",
+      short: "hi",
+      event_type: "tx.confirmed",
+      notification_id: "n3b",
+    });
+    expect(r.provider).toBe("apns");
+  });
+
+  it("push channel fails when no device token is registered", async () => {
+    const r = await pushChannel.send({
+      to: "nobody",
+      subject: "",
+      text: "",
+      html: "",
+      short: "hi",
+      event_type: "tx.confirmed",
+      notification_id: "n3c",
+    });
+    expect(r.status).toBe("failed");
+    expect(r.error).toMatch(/no device token/);
   });
 
   it("webhook channel records a delivery attempt", async () => {
@@ -147,6 +191,11 @@ describe("Audit emission", () => {
 });
 
 describe("healthz / readyz", () => {
+  beforeEach(async () => {
+    inMemoryBus.reset();
+    await consumer.stop();
+  });
+
   it("healthz ok", async () => {
     const app = buildApp();
     const res = await app.inject({ method: "GET", url: "/healthz" });
@@ -154,11 +203,22 @@ describe("healthz / readyz", () => {
     expect(res.json().status).toBe("ok");
   });
 
-  it("readyz ok", async () => {
+  it("readyz reports not ready while consumer is not subscribed", async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: "GET", url: "/readyz" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().ready).toBe(false);
+    expect(res.json().subscribed).toBe(false);
+  });
+
+  it("readyz reports ready after consumer starts", async () => {
+    await consumer.start();
     const app = buildApp();
     const res = await app.inject({ method: "GET", url: "/readyz" });
     expect(res.statusCode).toBe(200);
     expect(res.json().ready).toBe(true);
+    expect(res.json().subscribed).toBe(true);
+    await consumer.stop();
   });
 });
 

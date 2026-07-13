@@ -16,6 +16,7 @@ import {
   deliverWithBackoff,
   DEFAULT_BACKOFF_MS,
 } from "./webhooks.js";
+import { consumer } from "./consumer.js";
 import type { ChannelName } from "./types.js";
 
 export interface AppOptions {
@@ -27,7 +28,13 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   app.get("/healthz", async () => ({ status: "ok" }));
 
-  app.get("/readyz", async () => ({ status: "ready", ready: true }));
+  app.get("/readyz", async (_req, reply) => {
+    const report = consumer.readiness();
+    const code = report.ready ? 200 : 503;
+    return reply
+      .code(code)
+      .send({ status: report.ready ? "ready" : "not_ready", ...report });
+  });
 
   // ---- Preferences ----
   app.post<{ Params: { user_id: string } }>(

@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import app, { start } from "./index.js";
+import { inMemoryBus, consumer } from "./consumer.js";
 
 describe("GET /healthz", () => {
   it("returns status ok", async () => {
@@ -15,9 +16,11 @@ describe("GET /healthz", () => {
 });
 
 describe("start", () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
     delete process.env.PORT;
+    inMemoryBus.reset();
+    await consumer.stop();
   });
 
   it("listens on the port from the PORT env var", async () => {

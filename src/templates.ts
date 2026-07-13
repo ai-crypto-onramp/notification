@@ -1,3 +1,4 @@
+import Handlebars from "handlebars";
 import type {
   EventType,
   ChannelName,
@@ -7,14 +8,16 @@ import type {
 } from "./types.js";
 import { store } from "./store.js";
 
-function renderString(tpl: string, data: Record<string, unknown>): string {
-  return tpl.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_match, key: string) => {
-    const value = key
-      .split(".")
-      .reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined), data);
-    return value === undefined || value === null ? "" : String(value);
-  });
-}
+// Safe helper set: no raw HTML injection in SMS/push. Handlebars escapes HTML
+// for `{{var}}` by default; `{{{var}}}` (raw) is reserved for email HTML bodies
+// authored by trusted templates only.
+Handlebars.registerHelper("uppercase", (v: unknown) =>
+  typeof v === "string" ? v.toUpperCase() : String(v ?? ""),
+);
+Handlebars.registerHelper("truncate", (v: unknown, len: number) => {
+  const s = v == null ? "" : String(v);
+  return s.length > len ? `${s.slice(0, len)}…` : s;
+});
 
 export interface CompiledTemplate {
   template: NotificationTemplate;
@@ -24,7 +27,15 @@ export interface CompiledTemplate {
   short_body: string;
 }
 
-const cache = new Map<string, CompiledTemplate>();
+interface CompiledCache {
+  template: NotificationTemplate;
+  subject: Handlebars.TemplateDelegate;
+  text: Handlebars.TemplateDelegate;
+  html: Handlebars.TemplateDelegate;
+  short: Handlebars.TemplateDelegate;
+}
+
+const cache = new Map<string, CompiledCache>();
 
 function keyFor(eventType: EventType, channel: ChannelName, locale: Locale): string {
   return `${eventType}|${channel}|${locale}`;
@@ -38,15 +49,15 @@ export interface TemplateService {
     data: Record<string, unknown>,
   ): CompiledTemplate;
   invalidate(): void;
+  invalidate(eventType: EventType, channel: ChannelName, locale?: Locale): void;
 }
-
-function compile(template: NotificationTemplate, data: Record<string, unknown>): CompiledTemplate {
+function compileAll(t: NotificationTemplate): CompiledCache {
   return {
-    template,
-    subject: renderString(template.subject, data),
-    text_body: renderString(template.text_body, data),
-    html_body: renderString(template.html_body, data),
-    short_body: renderString(template.short_body, data),
+    template: t,
+    subject: Handlebars.compile(t.subject, { noEscape: false, strict: false }),
+    text: Handlebars.compile(t.text_body, { noEscape: false, strict: false }),
+    html: Handlebars.compile(t.html_body, { noEscape: false, strict: false }),
+    short: Handlebars.compile(t.short_body, { noEscape: false, strict: false }),
   };
 }
 
@@ -59,13 +70,34 @@ export const templateService: TemplateService = {
       if (!template) {
         throw new Error(`No template for ${eventType}/${channel}/${locale}`);
       }
-      compiled = compile(template, {});
+      compiled = compileAll(template);
       cache.set(k, compiled);
     }
-    return compile(compiled.template, data);
+    const d = data ?? {};
+    return {
+      template: compiled.template,
+      subject: compiled.subject(d),
+      text_body: compiled.text(d),
+      html_body: compiled.html(d),
+      short_body: compiled.short(d),
+    };
   },
-  invalidate() {
-    cache.clear();
+  invalidate(eventType?: EventType, channel?: ChannelName, locale?: Locale): void {
+    if (eventType === undefined) {
+      cache.clear();
+      return;
+    }
+    if (channel === undefined) {
+      cache.clear();
+      return;
+    }
+    if (locale) {
+      cache.delete(keyFor(eventType, channel, locale));
+    } else {
+      for (const key of Array.from(cache.keys())) {
+        if (key.startsWith(`${eventType}|${channel}|`)) cache.delete(key);
+      }
+    }
   },
 };
 
@@ -89,4 +121,10 @@ export function buildMessage(
   };
 }
 
+// Back-compat for existing tests that exercise the renderer directly.
+export function renderString(tpl: string, data: Record<string, unknown>): string {
+  return Handlebars.compile(tpl, { noEscape: false, strict: false })(data ?? {});
+}
+
+// Back-compat alias used by templates.test.ts.
 export const __renderString = renderString;

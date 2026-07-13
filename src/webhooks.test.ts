@@ -1,6 +1,8 @@
-import { beforeEach, describe, it, expect } from "vitest";
+import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { store } from "./store.js";
 import { buildApp } from "./app.js";
+import { webhookChannel } from "./channels.js";
+import { templateService } from "./templates.js";
 import {
   signWebhookPayload,
   verifyWebhookSignature,
@@ -132,5 +134,43 @@ describe("Webhooks", () => {
       payload: { secret, raw_body: raw, timestamp, signature },
     });
     expect(res.json().valid).toBe(true);
+  });
+});
+
+describe("WebhookChannel batch coalescing", () => {
+  beforeEach(() => {
+    store.reset();
+    templateService.invalidate();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("coalesces a burst of sends for the same partner into one batch", async () => {
+    vi.useFakeTimers();
+    const wh = registerWebhook({ url: "https://p/h", secret: "s" });
+    const promises: Promise<unknown>[] = [];
+    for (let i = 0; i < 5; i++) {
+      promises.push(
+        webhookChannel.send({
+          to: "https://p/h",
+          subject: "",
+          text: "",
+          html: "",
+          short: `hi-${i}`,
+          event_type: "tx.confirmed",
+          notification_id: `batch-${i}`,
+        }, { webhookId: wh.id }),
+      );
+    }
+    // Nothing resolved yet (batch window open).
+    expect(promises.every((p) => Promise.race([p, Promise.resolve("pending")]).then((v) => v === "pending"))).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    const results = await Promise.all(promises);
+    expect((results as { status: string }[]).every((r) => r.status === "delivered")).toBe(true);
+    // A single coalesced delivery id is shared across all notifications.
+    const ids = new Set(store.attempts.map((a) => a.provider_message_id));
+    expect(ids.size).toBe(1);
+    expect(store.attempts.length).toBe(5);
   });
 });

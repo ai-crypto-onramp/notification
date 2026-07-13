@@ -129,6 +129,6 @@ export interface Channel {
 export interface DeliveryResult {
   provider: string;
   provider_message_id: string;
-  status: NotificationStatus;
+  status: NotificationStatus | "throttled";
   error: string | null;
 }

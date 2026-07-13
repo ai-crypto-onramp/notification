@@ -10,6 +10,11 @@ import type {
   Locale,
   TrafficClass,
 } from "./types.js";
+import { getRedis, dedupKey, inMemoryRedis } from "./redis.js";
+
+function inMemoryRedisClear(): void {
+  inMemoryRedis.clear();
+}
 
 const EVENTS_BY_CLASS: Record<TrafficClass, EventType[]> = {
   transactional: [
@@ -133,6 +138,7 @@ export class Store {
     this.dedup.clear();
     this.webhookDeliveries.clear();
     this.templates = templates();
+    inMemoryRedisClear();
   }
 
   getTemplate(
@@ -194,6 +200,35 @@ export class Store {
   isDuplicate(event_id: string, channel: ChannelName, recipient: string): boolean {
     const key = `${event_id}|${channel}|${recipient}`;
     return this.dedup.has(key);
+  }
+
+  /**
+   * Redis-backed dedup check. Uses `GET dedup:event_id|channel|recipient`.
+   * Returns true if a dedup key already exists (idempotent send guard).
+   */
+  async isDuplicateRedis(
+    event_id: string,
+    channel: ChannelName,
+    recipient: string,
+  ): Promise<boolean> {
+    const key = dedupKey(event_id, channel, recipient);
+    const v = await getRedis().get(key);
+    return v !== null;
+  }
+
+  /**
+   * Record a dedup key in Redis with TTL via SETNX semantics so concurrent
+   * producers cannot both win. Returns true if this caller won the race.
+   */
+  async markSentRedis(
+    event_id: string,
+    channel: ChannelName,
+    recipient: string,
+    ttlMs = 60_000,
+  ): Promise<boolean> {
+    const key = dedupKey(event_id, channel, recipient);
+    const won = await getRedis().setNxTtl(key, "1", ttlMs);
+    return won === 1;
   }
 
   markSent(event_id: string, channel: ChannelName, recipient: string, ttlMs = 60_000): void {

@@ -11,6 +11,7 @@ import type {
 import { store, makeId } from "./store.js";
 import { buildMessage } from "./templates.js";
 import { channelByName } from "./channels.js";
+import { getAuditEmitter } from "./audit.js";
 
 function defaultPreference(user_id: string): UserPreference {
   return {
@@ -147,7 +148,7 @@ function emitAudit(
   status: AuditEvent["status"],
   payload: Record<string, unknown>,
 ): void {
-  store.addAudit({
+  const event: AuditEvent = {
     id: makeId("audit"),
     type,
     notification_id: notificationId,
@@ -155,7 +156,10 @@ function emitAudit(
     status,
     created_at: new Date().toISOString(),
     payload,
-  });
+  };
+  store.addAudit(event);
+  // Fire-and-forget the external emit so a downstream outage never blocks sends.
+  void getAuditEmitter().emit(event);
 }
 
 export const channelRouter = new ChannelRouter();
@@ -164,13 +168,15 @@ export async function sendRoute(route: RouteResult): Promise<void> {
   if (route.suppressed) return;
   const result = await route.channel.send(route.message);
   const notif = route.notification;
-  notif.status = result.status;
+  // "throttled" is a transient attempt state; the notification stays pending
+  // so a retry can re-enter. Map to a NotificationStatus for persistence.
+  notif.status = result.status === "throttled" ? "pending" : result.status;
   notif.sent_at = new Date().toISOString();
   emitAudit(
     result.status === "delivered" ? "notification.delivered" : "notification.failed",
     notif.id,
     notif.channel,
-    result.status,
+    result.status === "throttled" ? "pending" : result.status,
     { provider: result.provider, provider_message_id: result.provider_message_id },
   );
 }
