@@ -211,7 +211,7 @@ Environment variables:
 | `WEBHOOK_MAX_ATTEMPTS` | Max retry attempts for partner webhooks. | `5` |
 | `WEBHOOK_BATCH_WINDOW_MS` | Batching window for high-volume partner webhooks. | `1000` |
 | `EVENT_CONSUMER_GROUP` | Consumer group name on the event bus. | `notification` |
-| `EVENT_BUS_URL` | Event bus broker endpoint. | `nats://broker:4222` |
+| `EVENT_BUS_URL` | Event bus broker endpoint. | `kafka://broker:9092` |
 | `AUDIT_EVENT_LOG_URL` | audit-event-log ingest endpoint. | `http://audit:8080/v1/events` |
 | `RATE_LIMIT_EMAIL_RPS` | SES send rate cap. | `14` |
 | `RATE_LIMIT_SMS_RPS` | SMS send rate cap. | `10` |
