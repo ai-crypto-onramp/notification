@@ -167,6 +167,12 @@ export class Store {
     return this.preferences.get(user_id);
   }
 
+  listPreferences(): UserPreference[] {
+    return Array.from(this.preferences.values()).sort((a, b) =>
+      a.user_id.localeCompare(b.user_id),
+    );
+  }
+
   addWebhook(w: PartnerWebhook): void {
     this.webhooks.set(w.id, w);
     if (pgEnabled()) void pgAddWebhook(w);
@@ -187,6 +193,14 @@ export class Store {
 
   getNotification(id: string): Notification | undefined {
     return this.notifications.get(id);
+  }
+
+  listNotifications(): Notification[] {
+    return Array.from(this.notifications.values()).sort((a, b) => {
+      const ta = a.created_at ?? "";
+      const tb = b.created_at ?? "";
+      return tb.localeCompare(ta);
+    });
   }
 
   addAttempt(a: DeliveryAttempt): void {

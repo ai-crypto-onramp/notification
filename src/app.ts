@@ -37,6 +37,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
 
   // ---- Preferences ----
+  app.get("/v1/preferences", async () => {
+    return { preferences: store.listPreferences() };
+  });
+
   app.post<{ Params: { user_id: string } }>(
     "/v1/preferences/:user_id",
     async (req, reply) => {
@@ -78,6 +82,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
 
   // ---- Notifications ----
+  app.get("/v1/notifications", async () => {
+    return { notifications: store.listNotifications() };
+  });
+
   app.post("/v1/notifications/send", async (req, reply) => {
     try {
       const notif = manualSend(req.body as never);

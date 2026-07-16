@@ -104,9 +104,12 @@ Responsibilities:
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/notifications/send` | Internal: enqueue a notification (used by other services for non-event-driven sends). |
+| `GET` | `/v1/notifications` | List all notifications (newest first). |
 | `GET` | `/v1/notifications/:id` | Fetch a notification record by id. |
 | `GET` | `/v1/notifications/:id/status` | Fetch aggregated delivery status across channels. |
+| `GET` | `/v1/preferences` | List all user preference records. |
 | `POST` | `/v1/preferences/:user_id` | Set per-user channel preferences and opt-outs. |
+| `GET` | `/v1/preferences/:user_id` | Fetch per-user channel preferences. |
 | `POST` | `/v1/webhooks/partners` | Partner delivery confirmation callback (ack / failure). |
 
 ### Data model
