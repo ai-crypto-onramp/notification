@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/migrations ./migrations
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:8080/healthz || exit 1

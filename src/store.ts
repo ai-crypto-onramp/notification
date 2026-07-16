@@ -11,6 +11,7 @@ import type {
   TrafficClass,
 } from "./types.js";
 import { getRedis, dedupKey, inMemoryRedis } from "./redis.js";
+import { pgEnabled, pgAddNotification, pgAddAttempt, pgUpsertPreference, pgAddWebhook } from "./pgstore.js";
 
 function inMemoryRedisClear(): void {
   inMemoryRedis.clear();
@@ -159,6 +160,7 @@ export class Store {
 
   setPreference(p: UserPreference): void {
     this.preferences.set(p.user_id, p);
+    if (pgEnabled()) void pgUpsertPreference(p);
   }
 
   getPreference(user_id: string): UserPreference | undefined {
@@ -167,6 +169,7 @@ export class Store {
 
   addWebhook(w: PartnerWebhook): void {
     this.webhooks.set(w.id, w);
+    if (pgEnabled()) void pgAddWebhook(w);
   }
 
   listWebhooks(): PartnerWebhook[] {
@@ -179,6 +182,7 @@ export class Store {
 
   addNotification(n: Notification): void {
     this.notifications.set(n.id, n);
+    if (pgEnabled()) void pgAddNotification(n);
   }
 
   getNotification(id: string): Notification | undefined {
@@ -187,6 +191,7 @@ export class Store {
 
   addAttempt(a: DeliveryAttempt): void {
     this.attempts.push(a);
+    if (pgEnabled()) void pgAddAttempt(a);
   }
 
   attemptsFor(notification_id: string): DeliveryAttempt[] {
