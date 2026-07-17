@@ -25,7 +25,7 @@ describe("Event ingestion", () => {
     expect(store.notifications.size).toBeGreaterThanOrEqual(2);
     const attempts = store.attempts;
     expect(attempts.length).toBeGreaterThanOrEqual(2);
-    expect(attempts.every((a) => a.status === "delivered")).toBe(true);
+    expect(attempts.every((a) => a.status === "DELIVERED")).toBe(true);
   });
 
   it("dedups on event_id+channel+recipient", async () => {
@@ -56,19 +56,19 @@ describe("Manual send", () => {
   it("sends a notification via manual send", () => {
     const n = manualSend({
       event_id: "m1",
-      channel: "email",
+      channel: "EMAIL",
       recipient: "x@example.com",
       event_type: "tx.created",
       data: { tx_id: "t2", user_name: "Bob" },
     });
-    expect(n.channel).toBe("email");
+    expect(n.channel).toBe("EMAIL");
     expect(n.recipient).toBe("x@example.com");
   });
 
   it("rejects duplicate manual sends", () => {
     manualSend({
       event_id: "m2",
-      channel: "email",
+      channel: "EMAIL",
       recipient: "x@example.com",
       event_type: "tx.created",
       data: { tx_id: "t3" },
@@ -76,7 +76,7 @@ describe("Manual send", () => {
     expect(() =>
       manualSend({
         event_id: "m2",
-        channel: "email",
+        channel: "EMAIL",
         recipient: "x@example.com",
         event_type: "tx.created",
         data: { tx_id: "t3" },
@@ -118,21 +118,21 @@ describe("Notification status endpoints", () => {
       url: "/v1/notifications/send",
       payload: {
         event_id: "s1",
-        channel: "email",
+        channel: "EMAIL",
         recipient: "u@x.com",
         event_type: "tx.created",
         data: { tx_id: "tx9", user_name: "Sam" },
       },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json().channel).toBe("email");
+    expect(res.json().channel).toBe("EMAIL");
   });
 
   it("POST /v1/notifications/send rejects duplicates with 400", async () => {
     const app = buildApp();
     const payload = {
       event_id: "s2",
-      channel: "email",
+      channel: "EMAIL",
       recipient: "u@x.com",
       event_type: "tx.created",
       data: { tx_id: "tx10" },

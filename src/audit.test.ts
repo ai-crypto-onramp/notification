@@ -7,14 +7,14 @@ import {
   initAuditEmitterFromEnv,
   recordAudit,
 } from "./audit.js";
-import { store, makeId } from "./store.js";
+import { store, newId } from "./store.js";
 
 describe("RecordingAuditEmitter", () => {
   it("records emitted events", async () => {
     const e = new RecordingAuditEmitter();
     const evt = {
       id: "a1", type: "notification.delivered" as const, notification_id: "n1",
-      channel: "email" as const, status: "delivered" as const,
+      channel: "EMAIL" as const, status: "DELIVERED" as const,
       created_at: new Date().toISOString(), payload: {},
     };
     await e.emit(evt);
@@ -30,7 +30,7 @@ describe("HttpAuditEmitter", () => {
     const e = new HttpAuditEmitter("http://audit.example/v1/events", fetchMock as never);
     const evt = {
       id: "a2", type: "notification.delivered" as const, notification_id: "n2",
-      channel: "sms" as const, status: "delivered" as const,
+      channel: "SMS" as const, status: "DELIVERED" as const,
       created_at: new Date().toISOString(), payload: {},
     };
     await e.emit(evt);
@@ -46,7 +46,7 @@ describe("HttpAuditEmitter", () => {
     const e = new HttpAuditEmitter("http://audit.example/v1/events", fetchMock as never);
     const evt = {
       id: "a3", type: "notification.failed" as const, notification_id: "n3",
-      channel: "email" as const, status: "failed" as const,
+      channel: "EMAIL" as const, status: "FAILED" as const,
       created_at: new Date().toISOString(), payload: {},
     };
     await expect(e.emit(evt)).resolves.toBeUndefined();
@@ -60,7 +60,7 @@ describe("HttpAuditEmitter", () => {
     const e = new HttpAuditEmitter("http://audit.example/v1/events", fetchMock as never);
     await e.emit({
       id: "a4", type: "notification.delivered" as const, notification_id: "n4",
-      channel: "email" as const, status: "delivered" as const,
+      channel: "EMAIL" as const, status: "DELIVERED" as const,
       created_at: new Date().toISOString(), payload: {},
     });
     expect(warnSpy).toHaveBeenCalled();
@@ -98,8 +98,8 @@ describe("recordAudit", () => {
     const rec = new RecordingAuditEmitter();
     setAuditEmitter(rec);
     const evt = {
-      id: makeId("audit"), type: "notification.requested" as const, notification_id: "n",
-      channel: "email" as const, status: "pending" as const,
+      id: newId(), type: "notification.requested" as const, notification_id: "n",
+      channel: "EMAIL" as const, status: "PENDING" as const,
       created_at: new Date().toISOString(), payload: {},
     };
     await recordAudit(evt);

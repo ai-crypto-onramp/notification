@@ -48,6 +48,6 @@ describe("redis client singleton", () => {
     expect(getRedis()).toBe(custom);
   });
   it("dedupKey formats the key", () => {
-    expect(dedupKey("e1", "email", "u@x.com")).toBe("dedup:e1|email|u@x.com");
+    expect(dedupKey("e1", "EMAIL", "u@x.com")).toBe("dedup:e1|EMAIL|u@x.com");
   });
 });

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { PartnerWebhook, RetryPolicy } from "./types.js";
-import { store, makeId } from "./store.js";
+import { store, makeId, newId } from "./store.js";
 
 export interface SignedPayload {
   timestamp: string;
@@ -57,12 +57,12 @@ export function registerWebhook(input: {
   retry_policy?: RetryPolicy;
 }): PartnerWebhook {
   const webhook: PartnerWebhook = {
-    id: makeId("wh"),
+    id: newId(),
     url: input.url,
     secret: input.secret,
     event_filters: input.event_filters ?? ["*"],
     retry_policy: input.retry_policy ?? defaultRetryPolicy(),
-    status: "active",
+    status: "ACTIVE",
     created_at: new Date().toISOString(),
   };
   store.addWebhook(webhook);
@@ -88,7 +88,7 @@ export async function deliverWithBackoff(
     const { timestamp, signature } = signWebhookPayload(webhook.secret, rawBody);
     void timestamp;
     void signature;
-    const status = simulateFailure ? "failed" : "delivered";
+    const status = simulateFailure ? "FAILED" : "DELIVERED";
     const at = new Date().toISOString();
     attempts.push({ attempt_no: attemptNo, status, at });
     if (!simulateFailure) {

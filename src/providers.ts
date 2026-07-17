@@ -48,7 +48,7 @@ export class StubSesProvider implements SesProvider {
     return {
       provider: "ses",
       provider_message_id: `email_${input.notificationId}_${this.sent.length}`,
-      status: "delivered",
+      status: "DELIVERED",
       error: null,
     };
   }
@@ -99,7 +99,7 @@ export class StubSnsProvider implements SnsProvider {
     return {
       provider: "sns",
       provider_message_id: `sms_${input.notificationId}_${this.sent.length}`,
-      status: "delivered",
+      status: "DELIVERED",
       error: null,
     };
   }
@@ -112,7 +112,7 @@ export class StubTwilioProvider implements TwilioProvider {
     return {
       provider: "twilio",
       provider_message_id: `sms_${input.notificationId}_${this.sent.length}`,
-      status: "delivered",
+      status: "DELIVERED",
       error: null,
     };
   }
@@ -198,7 +198,7 @@ export class StubFcmProvider implements FcmProvider {
     return {
       provider: "fcm",
       provider_message_id: `push_${input.notificationId}_${this.sent.length}`,
-      status: "delivered",
+      status: "DELIVERED",
       error: null,
     };
   }
@@ -211,7 +211,7 @@ export class StubApnsProvider implements ApnsProvider {
     return {
       provider: "apns",
       provider_message_id: `push_${input.notificationId}_${this.sent.length}`,
-      status: "delivered",
+      status: "DELIVERED",
       error: null,
     };
   }
@@ -223,18 +223,18 @@ export class StubApnsProvider implements ApnsProvider {
 
 const ERROR_STATUS_MAP: Record<string, DeliveryResult["status"]> = {
   // SES / SNS / Twilio
-  throttled: "throttled",
-  throttling: "throttled",
-  "throttling.rate": "throttled",
-  "account.throttled": "throttled",
-  invalid: "bounced",
-  "invalid.parameter": "bounced",
-  "invalid.parameter.value": "bounced",
+  throttled: "THROTTLED",
+  throttling: "THROTTLED",
+  "throttling.rate": "THROTTLED",
+  "account.throttled": "THROTTLED",
+  invalid: "BOUNCED",
+  "invalid.parameter": "BOUNCED",
+  "invalid.parameter.value": "BOUNCED",
   // Push
-  "invalid registration": "bounced",
-  "notregistered": "bounced",
-  unregistered: "bounced",
-  "invalid-token": "bounced",
+  "invalid registration": "BOUNCED",
+  "notregistered": "BOUNCED",
+  unregistered: "BOUNCED",
+  "invalid-token": "BOUNCED",
 };
 
 export function mapProviderError(
@@ -243,7 +243,7 @@ export function mapProviderError(
 ): DeliveryResult {
   const message = (err as Error).message ?? String(err);
   const lower = message.toLowerCase();
-  let status: DeliveryResult["status"] = "failed";
+  let status: DeliveryResult["status"] = "FAILED";
   for (const key of Object.keys(ERROR_STATUS_MAP)) {
     if (lower.includes(key.toLowerCase())) {
       status = ERROR_STATUS_MAP[key];

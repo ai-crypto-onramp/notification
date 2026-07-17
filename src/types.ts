@@ -1,4 +1,4 @@
-export type ChannelName = "email" | "sms" | "push" | "webhook";
+export type ChannelName = "EMAIL" | "SMS" | "PUSH" | "WEBHOOK";
 
 export type EventType =
   | "tx.created"
@@ -10,14 +10,14 @@ export type EventType =
   | "chain.confirmed";
 
 export type NotificationStatus =
-  | "pending"
-  | "sent"
-  | "delivered"
-  | "failed"
-  | "bounced"
-  | "suppressed";
+  | "PENDING"
+  | "SENT"
+  | "DELIVERED"
+  | "FAILED"
+  | "BOUNCED"
+  | "SUPPRESSED";
 
-export type TrafficClass = "transactional" | "marketing";
+export type TrafficClass = "TRANSACTIONAL" | "MARKETING";
 
 export type Locale = string;
 
@@ -51,7 +51,7 @@ export interface DeliveryAttempt {
   channel: ChannelName;
   provider: string;
   provider_message_id: string | null;
-  status: NotificationStatus | "throttled";
+  status: NotificationStatus | "THROTTLED";
   attempt_no: number;
   error: string | null;
   created_at: string;
@@ -81,7 +81,7 @@ export interface PartnerWebhook {
   secret: string;
   event_filters: EventType[] | ["*"];
   retry_policy: RetryPolicy;
-  status: "active" | "disabled";
+  status: "ACTIVE" | "DISABLED";
   created_at: string;
 }
 
@@ -129,6 +129,6 @@ export interface Channel {
 export interface DeliveryResult {
   provider: string;
   provider_message_id: string;
-  status: NotificationStatus | "throttled";
+  status: NotificationStatus | "THROTTLED";
   error: string | null;
 }

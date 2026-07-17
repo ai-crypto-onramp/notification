@@ -38,7 +38,7 @@ describe("TemplateService.resolve", () => {
       reason: "insufficient fee",
     };
     for (const ev of EVENTS) {
-      const compiled = templateService.resolve(ev, "email", "en", data);
+      const compiled = templateService.resolve(ev, "EMAIL", "en", data);
       expect(compiled.subject).toContain("tx1");
       expect(compiled.text_body).toContain("Alice");
       expect(compiled.html_body).toContain("Alice");
@@ -56,7 +56,7 @@ describe("TemplateService.resolve", () => {
       reason: "insufficient fee",
     };
     for (const ev of EVENTS) {
-      for (const ch of ["sms", "push"] as const) {
+      for (const ch of ["SMS", "PUSH"] as const) {
         const compiled = templateService.resolve(ev, ch, "en", data);
         expect(compiled.short_body).toContain("tx1");
         expect(compiled.short_body.length).toBeGreaterThan(0);
@@ -65,7 +65,7 @@ describe("TemplateService.resolve", () => {
   });
 
   it("falls back to default locale", () => {
-    const compiled = templateService.resolve("tx.created", "email", "fr", {
+    const compiled = templateService.resolve("tx.created", "EMAIL", "fr", {
       tx_id: "x",
     });
     expect(compiled.template.locale).toBe("en");
@@ -74,13 +74,13 @@ describe("TemplateService.resolve", () => {
 
   it("throws on unknown template", () => {
     expect(() =>
-      templateService.resolve("unknown.event" as never, "email", "en", {}),
+      templateService.resolve("unknown.event" as never, "EMAIL", "en", {}),
     ).toThrow();
   });
 
   it("caches compiled templates", () => {
-    templateService.resolve("tx.created", "email", "en", {});
-    const before = templateService.resolve("tx.created", "email", "en", { tx_id: "z" });
+    templateService.resolve("tx.created", "EMAIL", "en", {});
+    const before = templateService.resolve("tx.created", "EMAIL", "en", { tx_id: "z" });
     expect(before.subject).toContain("z");
   });
 });

@@ -8,7 +8,7 @@ import type {
   AuditEvent,
   TrafficClass,
 } from "./types.js";
-import { store, makeId } from "./store.js";
+import { store, newId } from "./store.js";
 import { buildMessage } from "./templates.js";
 import { channelByName } from "./channels.js";
 import { getAuditEmitter } from "./audit.js";
@@ -16,7 +16,7 @@ import { getAuditEmitter } from "./audit.js";
 function defaultPreference(user_id: string): UserPreference {
   return {
     user_id,
-    channels: { email: true, sms: true, push: true, webhook: true },
+    channels: { EMAIL: true, SMS: true, PUSH: true, WEBHOOK: true },
     locale: "en",
     quiet_hours: null,
   };
@@ -63,7 +63,7 @@ export class ChannelRouter {
       const channel = channelByName(channelName);
       const optedIn = channel.verifyPreference(pref);
       const locale = (data.locale as string) ?? pref.locale ?? "en";
-      const id = makeId("notif");
+      const id = newId();
       const notification: Notification = {
         id,
         event_id: String(data.event_id ?? ""),
@@ -72,7 +72,7 @@ export class ChannelRouter {
         recipient,
         user_id: userId,
         template_id: `${eventType}/${channelName}/${locale}`,
-        status: "pending",
+        status: "PENDING",
         traffic_class: trafficClass,
         locale,
         created_at: new Date().toISOString(),
@@ -80,9 +80,9 @@ export class ChannelRouter {
       };
 
       if (!optedIn) {
-        notification.status = "suppressed";
+        notification.status = "SUPPRESSED";
         store.addNotification(notification);
-        emitAudit("notification.suppressed", id, channelName, "suppressed", {
+        emitAudit("notification.suppressed", id, channelName, "SUPPRESSED", {
           reason: "opted_out",
           user_id: userId,
         });
@@ -96,10 +96,10 @@ export class ChannelRouter {
         continue;
       }
 
-      if (trafficClass === "marketing" && inQuietHours(pref)) {
-        notification.status = "suppressed";
+      if (trafficClass === "MARKETING" && inQuietHours(pref)) {
+        notification.status = "SUPPRESSED";
         store.addNotification(notification);
-        emitAudit("notification.suppressed", id, channelName, "suppressed", {
+        emitAudit("notification.suppressed", id, channelName, "SUPPRESSED", {
           reason: "quiet_hours",
           user_id: userId,
         });
@@ -114,7 +114,7 @@ export class ChannelRouter {
       }
 
       store.addNotification(notification);
-      emitAudit("notification.requested", id, channelName, "pending", {
+      emitAudit("notification.requested", id, channelName, "PENDING", {
         event_type: eventType,
         user_id: userId,
         traffic_class: trafficClass,
@@ -130,10 +130,10 @@ export class ChannelRouter {
   }
 
   channelSetFor(eventType: EventType): ChannelName[] {
-    // Fan-out: tx.confirmed → email + push; others → email + sms by default.
-    if (eventType === "tx.confirmed") return ["email", "push"];
-    if (eventType === "chain.confirmed") return ["email", "push"];
-    return ["email", "sms"];
+    // Fan-out: tx.confirmed → EMAIL + PUSH; others → EMAIL + SMS by default.
+    if (eventType === "tx.confirmed") return ["EMAIL", "PUSH"];
+    if (eventType === "chain.confirmed") return ["EMAIL", "PUSH"];
+    return ["EMAIL", "SMS"];
   }
 }
 
@@ -149,7 +149,7 @@ function emitAudit(
   payload: Record<string, unknown>,
 ): void {
   const event: AuditEvent = {
-    id: makeId("audit"),
+    id: newId(),
     type,
     notification_id: notificationId,
     channel,
@@ -168,15 +168,15 @@ export async function sendRoute(route: RouteResult): Promise<void> {
   if (route.suppressed) return;
   const result = await route.channel.send(route.message);
   const notif = route.notification;
-  // "throttled" is a transient attempt state; the notification stays pending
+  // "THROTTLED" is a transient attempt state; the notification stays pending
   // so a retry can re-enter. Map to a NotificationStatus for persistence.
-  notif.status = result.status === "throttled" ? "pending" : result.status;
+  notif.status = result.status === "THROTTLED" ? "PENDING" : result.status;
   notif.sent_at = new Date().toISOString();
   emitAudit(
-    result.status === "delivered" ? "notification.delivered" : "notification.failed",
+    result.status === "DELIVERED" ? "notification.delivered" : "notification.failed",
     notif.id,
     notif.channel,
-    result.status === "throttled" ? "pending" : result.status,
+    result.status === "THROTTLED" ? "PENDING" : result.status,
     { provider: result.provider, provider_message_id: result.provider_message_id },
   );
 }

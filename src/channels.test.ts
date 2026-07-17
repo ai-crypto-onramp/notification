@@ -24,7 +24,7 @@ describe("Channels (in-memory sends)", () => {
       event_type: "tx.created",
       notification_id: "n1",
     });
-    expect(result.status).toBe("delivered");
+    expect(result.status).toBe("DELIVERED");
     expect(result.provider_message_id).toMatch(/^email_/);
     expect(store.attempts.length).toBe(1);
   });
@@ -95,7 +95,7 @@ describe("Channels (in-memory sends)", () => {
       event_type: "tx.confirmed",
       notification_id: "n3c",
     });
-    expect(r.status).toBe("failed");
+    expect(r.status).toBe("FAILED");
     expect(r.error).toMatch(/no device token/);
   });
 
@@ -109,7 +109,7 @@ describe("Channels (in-memory sends)", () => {
       event_type: "tx.confirmed",
       notification_id: "n4",
     });
-    expect(r.status).toBe("delivered");
+    expect(r.status).toBe("DELIVERED");
   });
 });
 
@@ -128,7 +128,7 @@ describe("Rate limiting", () => {
   });
 
   it("rate limiter throttles sends exceeding RPS", async () => {
-    getRateLimiter().configure("email", 2);
+    getRateLimiter().configure("EMAIL", 2);
     const start = Date.now();
     for (let i = 0; i < 3; i++) {
       await emailChannel.send({
@@ -144,7 +144,7 @@ describe("Rate limiting", () => {
     const elapsed = Date.now() - start;
     expect(elapsed).toBeGreaterThanOrEqual(0);
     expect(store.attempts.length).toBe(3);
-    getRateLimiter().configure("email", 10);
+    getRateLimiter().configure("EMAIL", 10);
   });
 });
 
@@ -174,7 +174,7 @@ describe("Audit emission", () => {
     emailChannel.send = async () => ({
       provider: "ses-stub",
       provider_message_id: "",
-      status: "failed",
+      status: "FAILED",
       error: "boom",
     });
     await ingestEvent({
@@ -230,8 +230,8 @@ describe("audit-events endpoint", () => {
       id: "x",
       type: "notification.requested",
       notification_id: "n",
-      channel: "email",
-      status: "pending",
+      channel: "EMAIL",
+      status: "PENDING",
       created_at: new Date().toISOString(),
       payload: {},
     });
@@ -289,7 +289,7 @@ describe("error handling", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/webhooks/partners/zzz/confirm",
-      payload: { notification_id: "n", status: "delivered" },
+      payload: { notification_id: "n", status: "DELIVERED" },
     });
     expect(res.statusCode).toBe(404);
   });

@@ -99,10 +99,10 @@ function rowToPreference(r: Record<string, unknown>): UserPreference {
   return {
     user_id: String(r.user_id),
     channels: {
-      email: Boolean(r.email),
-      sms: Boolean(r.sms),
-      push: Boolean(r.push),
-      webhook: Boolean(r.webhook),
+      EMAIL: Boolean(r.email),
+      SMS: Boolean(r.sms),
+      PUSH: Boolean(r.push),
+      WEBHOOK: Boolean(r.webhook),
     },
     locale: String(r.locale),
     quiet_hours:
@@ -143,9 +143,9 @@ export async function pgAddNotification(n: Notification): Promise<void> {
   const c = client();
   if (!c) return;
   await c.query(
-    `INSERT INTO notifications (id, event_id, event_type, channel, recipient, user_id, template_id, status, traffic_class, locale, created_at, sent_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-     ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, sent_at = EXCLUDED.sent_at`,
+    `INSERT INTO notifications (id, event_id, event_type, channel, recipient, user_id, template_id, status, traffic_class, locale, created_at, sent_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
+     ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, sent_at = EXCLUDED.sent_at, updated_at = now()`,
     [n.id, n.event_id, n.event_type, n.channel, n.recipient, n.user_id, n.template_id, n.status, n.traffic_class, n.locale, n.created_at, n.sent_at],
   );
 }
@@ -168,7 +168,7 @@ export async function pgUpsertPreference(p: UserPreference): Promise<void> {
     `INSERT INTO user_preferences (user_id, email, sms, push, webhook, locale, quiet_start, quiet_end, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
      ON CONFLICT (user_id) DO UPDATE SET email=EXCLUDED.email, sms=EXCLUDED.sms, push=EXCLUDED.push, webhook=EXCLUDED.webhook, locale=EXCLUDED.locale, quiet_start=EXCLUDED.quiet_start, quiet_end=EXCLUDED.quiet_end, updated_at=now()`,
-    [p.user_id, p.channels.email, p.channels.sms, p.channels.push, p.channels.webhook, p.locale, p.quiet_hours?.start ?? null, p.quiet_hours?.end ?? null],
+    [p.user_id, p.channels.EMAIL, p.channels.SMS, p.channels.PUSH, p.channels.WEBHOOK, p.locale, p.quiet_hours?.start ?? null, p.quiet_hours?.end ?? null],
   );
 }
 
@@ -176,9 +176,9 @@ export async function pgAddWebhook(w: PartnerWebhook): Promise<void> {
   const c = client();
   if (!c) return;
   await c.query(
-    `INSERT INTO partner_webhooks (id, url, secret, event_filters, retry_policy, status, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
-     ON CONFLICT (id) DO UPDATE SET url=EXCLUDED.url, secret=EXCLUDED.secret, event_filters=EXCLUDED.event_filters, retry_policy=EXCLUDED.retry_policy, status=EXCLUDED.status`,
+    `INSERT INTO partner_webhooks (id, url, secret, event_filters, retry_policy, status, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7, now())
+     ON CONFLICT (id) DO UPDATE SET url=EXCLUDED.url, secret=EXCLUDED.secret, event_filters=EXCLUDED.event_filters, retry_policy=EXCLUDED.retry_policy, status=EXCLUDED.status, updated_at=now()`,
     [w.id, w.url, w.secret, JSON.stringify(w.event_filters), JSON.stringify(w.retry_policy), w.status, w.created_at],
   );
 }

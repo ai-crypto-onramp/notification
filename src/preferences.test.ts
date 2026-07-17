@@ -8,11 +8,11 @@ describe("Preferences", () => {
 
   it("upserts and reads preferences", () => {
     const pref = upsertPreferences("u1", {
-      channels: { email: true, sms: false, push: true, webhook: false },
+      channels: { EMAIL: true, SMS: false, PUSH: true, WEBHOOK: false },
       locale: "fr",
       quiet_hours: { start: "22:00", end: "07:00" },
     });
-    expect(pref.channels.sms).toBe(false);
+    expect(pref.channels.SMS).toBe(false);
     expect(pref.locale).toBe("fr");
     expect(getPreferences("u1")).toEqual(pref);
   });
@@ -28,7 +28,7 @@ describe("Preferences", () => {
   it("validates quiet hours format", () => {
     expect(() =>
       upsertPreferences("u1", {
-        channels: { email: true, sms: true, push: true, webhook: true },
+        channels: { EMAIL: true, SMS: true, PUSH: true, WEBHOOK: true },
         quiet_hours: { start: "bad", end: "07:00" },
       }),
     ).toThrow();
@@ -56,7 +56,7 @@ describe("Preferences", () => {
       method: "POST",
       url: "/v1/preferences/u1",
       payload: {
-        channels: { email: true, sms: false, push: true, webhook: false },
+        channels: { EMAIL: true, SMS: false, PUSH: true, WEBHOOK: false },
         locale: "en",
       },
     });

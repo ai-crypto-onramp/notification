@@ -10,6 +10,7 @@ import type {
   Locale,
   TrafficClass,
 } from "./types.js";
+import { v7 as uuidv7 } from "uuid";
 import { getRedis, dedupKey, inMemoryRedis } from "./redis.js";
 import { pgEnabled, pgAddNotification, pgAddAttempt, pgUpsertPreference, pgAddWebhook } from "./pgstore.js";
 
@@ -18,7 +19,7 @@ function inMemoryRedisClear(): void {
 }
 
 const EVENTS_BY_CLASS: Record<TrafficClass, EventType[]> = {
-  transactional: [
+  TRANSACTIONAL: [
     "tx.created",
     "payment.captured",
     "tx.signed",
@@ -27,7 +28,7 @@ const EVENTS_BY_CLASS: Record<TrafficClass, EventType[]> = {
     "tx.refunded",
     "chain.confirmed",
   ],
-  marketing: [],
+  MARKETING: [],
 };
 
 function seedTemplate(
@@ -106,11 +107,11 @@ function templates(): NotificationTemplate[] {
     },
   };
 
-  const channels: ChannelName[] = ["email", "sms", "push"];
+  const channels: ChannelName[] = ["EMAIL", "SMS", "PUSH"];
   for (const event of ALL_EVENTS) {
     const b = bodies[event];
     for (const channel of channels) {
-      if (channel === "email") {
+      if (channel === "EMAIL") {
         tpls.push(seedTemplate(event, channel, b.subject, b.text, b.html, b.short));
       } else {
         tpls.push(seedTemplate(event, channel, "", b.short, "", b.short));
@@ -262,13 +263,22 @@ export class Store {
   }
 
   classify(eventType: EventType): TrafficClass {
-    if (EVENTS_BY_CLASS.transactional.includes(eventType)) return "transactional";
-    return "marketing";
+    if (EVENTS_BY_CLASS.TRANSACTIONAL.includes(eventType)) return "TRANSACTIONAL";
+    return "MARKETING";
   }
 }
 
 export const store = new Store();
 
+/**
+ * Generate a non-PK identifier (e.g. provider_message_id) with a human-readable
+ * prefix. Primary keys use {@link uuidv7} instead.
+ */
 export function makeId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+}
+
+/** Generate a UUIDv7 primary key (time-ordered, app-generated, DB-agnostic). */
+export function newId(): string {
+  return uuidv7();
 }

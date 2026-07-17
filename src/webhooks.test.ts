@@ -40,7 +40,7 @@ describe("Webhooks", () => {
     });
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.id).toMatch(/^wh_/);
+    expect(body.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(body.url).toBe("https://partner.example/hook");
   });
 
@@ -94,23 +94,23 @@ describe("Webhooks", () => {
       url: "/v1/notifications/send",
       payload: {
         event_id: "wc1",
-        channel: "webhook",
+        channel: "WEBHOOK",
         recipient: "https://p/h",
         event_type: "tx.confirmed",
         data: { tx_id: "txw", chain: "eth", confirmations: 1 },
       },
     });
     const notif = Array.from(store.notifications.values()).find(
-      (n) => n.channel === "webhook",
+      (n) => n.channel === "WEBHOOK",
     )!;
     expect(notif).toBeTruthy();
     const res = await app.inject({
       method: "POST",
       url: `/v1/webhooks/partners/${wh.id}/confirm`,
-      payload: { notification_id: notif.id, status: "delivered" },
+      payload: { notification_id: notif.id, status: "DELIVERED" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("delivered");
+    expect(res.json().status).toBe("DELIVERED");
   });
 
   it("confirm endpoint returns 404 for unknown webhook", async () => {
@@ -118,7 +118,7 @@ describe("Webhooks", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/webhooks/partners/wh_missing/confirm",
-      payload: { notification_id: "x", status: "delivered" },
+      payload: { notification_id: "x", status: "DELIVERED" },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -164,10 +164,10 @@ describe("WebhookChannel batch coalescing", () => {
       );
     }
     // Nothing resolved yet (batch window open).
-    expect(promises.every((p) => Promise.race([p, Promise.resolve("pending")]).then((v) => v === "pending"))).toBe(true);
+    expect(promises.every((p) => Promise.race([p, Promise.resolve("PENDING")]).then((v) => v === "PENDING"))).toBe(true);
     await vi.advanceTimersByTimeAsync(1000);
     const results = await Promise.all(promises);
-    expect((results as { status: string }[]).every((r) => r.status === "delivered")).toBe(true);
+    expect((results as { status: string }[]).every((r) => r.status === "DELIVERED")).toBe(true);
     // A single coalesced delivery id is shared across all notifications.
     const ids = new Set(store.attempts.map((a) => a.provider_message_id));
     expect(ids.size).toBe(1);

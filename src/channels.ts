@@ -30,9 +30,9 @@ import {
 } from "./providers.js";
 
 const rateLimiter = new RateLimiter();
-rateLimiter.configure("email", envRps("RATE_LIMIT_EMAIL_RPS", 14));
-rateLimiter.configure("sms", envRps("RATE_LIMIT_SMS_RPS", 10));
-rateLimiter.configure("push", envRps("RATE_LIMIT_PUSH_RPS", 50));
+rateLimiter.configure("EMAIL", envRps("RATE_LIMIT_EMAIL_RPS", 14));
+rateLimiter.configure("SMS", envRps("RATE_LIMIT_SMS_RPS", 10));
+rateLimiter.configure("PUSH", envRps("RATE_LIMIT_PUSH_RPS", 50));
 
 export function getRateLimiter(): RateLimiter {
   return rateLimiter;
@@ -65,7 +65,7 @@ function recordAttempt(
 // ---------------------------------------------------------------------------
 
 export class EmailChannel implements Channel {
-  name: ChannelName = "email";
+  name: ChannelName = "EMAIL";
   private sesConfig = loadSesConfig();
 
   constructor(private provider: SesProvider = new StubSesProvider()) {}
@@ -75,7 +75,7 @@ export class EmailChannel implements Channel {
   }
 
   async send(message: NotificationMessage): Promise<DeliveryResult> {
-    await rateLimiter.consume("email");
+    await rateLimiter.consume("EMAIL");
     let result: DeliveryResult;
     try {
       result = await this.provider.send({
@@ -93,7 +93,7 @@ export class EmailChannel implements Channel {
     return result;
   }
   verifyPreference(pref: UserPreference): boolean {
-    return pref.channels.email === true;
+    return pref.channels.EMAIL === true;
   }
 
   fromAddress(): string {
@@ -106,7 +106,7 @@ export class EmailChannel implements Channel {
 // ---------------------------------------------------------------------------
 
 export class SmsChannel implements Channel {
-  name: ChannelName = "sms";
+  name: ChannelName = "SMS";
   private smsConfig = loadSmsConfig();
 
   constructor(
@@ -120,7 +120,7 @@ export class SmsChannel implements Channel {
   }
 
   async send(message: NotificationMessage): Promise<DeliveryResult> {
-    await rateLimiter.consume("sms");
+    await rateLimiter.consume("SMS");
     const us = isUsNumber(message.to);
     let result: DeliveryResult;
     try {
@@ -143,7 +143,7 @@ export class SmsChannel implements Channel {
     return result;
   }
   verifyPreference(pref: UserPreference): boolean {
-    return pref.channels.sms === true;
+    return pref.channels.SMS === true;
   }
 
   config(): SmsConfigView {
@@ -164,7 +164,7 @@ export interface SmsConfigView {
 // ---------------------------------------------------------------------------
 
 export class PushChannel implements Channel {
-  name: ChannelName = "push";
+  name: ChannelName = "PUSH";
   private fcmConfig = loadFcmConfig();
   private apnsConfig = loadApnsConfig();
 
@@ -194,13 +194,13 @@ export class PushChannel implements Channel {
   }
 
   async send(message: NotificationMessage): Promise<DeliveryResult> {
-    await rateLimiter.consume("push");
+    await rateLimiter.consume("PUSH");
     const devices = this.resolveTokens(message.to);
     if (devices.length === 0) {
       const result: DeliveryResult = {
         provider: "fcm",
         provider_message_id: "",
-        status: "failed",
+        status: "FAILED",
         error: "no device token for recipient",
       };
       recordAttempt(message.notification_id, this.name, "fcm", result);
@@ -233,7 +233,7 @@ export class PushChannel implements Channel {
     return last!;
   }
   verifyPreference(pref: UserPreference): boolean {
-    return pref.channels.push === true;
+    return pref.channels.PUSH === true;
   }
 
   fcmKey(): string {
@@ -263,7 +263,7 @@ interface PendingBatch {
 }
 
 export class WebhookChannel implements Channel {
-  name: ChannelName = "webhook";
+  name: ChannelName = "WEBHOOK";
   private batches = new Map<string, PendingBatch>();
 
   async send(
@@ -326,7 +326,7 @@ export class WebhookChannel implements Channel {
     void signature;
     void timestamp;
     const provider_message_id = `webhook_${makeId("msg")}`;
-    const status: DeliveryResult["status"] = opts.simulateFailure ? "failed" : "delivered";
+    const status: DeliveryResult["status"] = opts.simulateFailure ? "FAILED" : "DELIVERED";
     // Record a single delivery attempt for the batch (per partner window).
     store.webhookDeliveries.set(provider_message_id, [
       { attempt_no: 1, status, at: new Date().toISOString() },
@@ -366,7 +366,7 @@ export class WebhookChannel implements Channel {
     const result: DeliveryResult = {
       provider,
       provider_message_id,
-      status: simulateFailure ? "failed" : "delivered",
+      status: simulateFailure ? "FAILED" : "DELIVERED",
       error: simulateFailure ? "failed" : null,
     };
     recordAttempt(message.notification_id, this.name, provider, result, 1);
@@ -377,7 +377,7 @@ export class WebhookChannel implements Channel {
   }
 
   verifyPreference(pref: UserPreference): boolean {
-    return pref.channels.webhook === true;
+    return pref.channels.WEBHOOK === true;
   }
 }
 
@@ -392,13 +392,13 @@ export const webhookChannel = new WebhookChannel();
 
 export function channelByName(name: ChannelName): Channel {
   switch (name) {
-    case "email":
+    case "EMAIL":
       return emailChannel;
-    case "sms":
+    case "SMS":
       return smsChannel;
-    case "push":
+    case "PUSH":
       return pushChannel;
-    case "webhook":
+    case "WEBHOOK":
       return webhookChannel;
   }
 }

@@ -15,12 +15,14 @@
   "dependencies": {
     "fastify": "^4.26.0",
     "handlebars": "^4.7.9",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/handlebars": "^4.0.40",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.20.0",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "^1.4.0",

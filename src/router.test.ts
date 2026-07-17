@@ -18,7 +18,7 @@ describe("ChannelRouter", () => {
       { tx_id: "t1", chain: "eth", confirmations: 12 },
     );
     const channels = routes.map((r) => r.notification.channel);
-    expect(channels).toEqual(["email", "push"]);
+    expect(channels).toEqual(["EMAIL", "PUSH"]);
     expect(routes.every((r) => !r.suppressed)).toBe(true);
   });
 
@@ -29,12 +29,12 @@ describe("ChannelRouter", () => {
       "user1",
       { tx_id: "t1" },
     );
-    expect(routes.map((r) => r.notification.channel)).toEqual(["email", "sms"]);
+    expect(routes.map((r) => r.notification.channel)).toEqual(["EMAIL", "SMS"]);
   });
 
   it("filters opted-out channels", () => {
     upsertPreferences("user1", {
-      channels: { email: true, sms: false, push: false, webhook: false },
+      channels: { EMAIL: true, SMS: false, PUSH: false, WEBHOOK: false },
       locale: "en",
     });
     const routes = channelRouter.resolve(
@@ -43,17 +43,17 @@ describe("ChannelRouter", () => {
       "user1",
       { tx_id: "t1" },
     );
-    const suppressed = routes.find((r) => r.notification.channel === "sms");
+    const suppressed = routes.find((r) => r.notification.channel === "SMS");
     expect(suppressed?.suppressed).toBe(true);
     expect(suppressed?.reason).toBe("opted_out");
-    expect(suppressed?.notification.status).toBe("suppressed");
-    const email = routes.find((r) => r.notification.channel === "email");
+    expect(suppressed?.notification.status).toBe("SUPPRESSED");
+    const email = routes.find((r) => r.notification.channel === "EMAIL");
     expect(email?.suppressed).toBe(false);
   });
 
   it("suppresses marketing during quiet hours", () => {
     upsertPreferences("user1", {
-      channels: { email: true, sms: true, push: true, webhook: true },
+      channels: { EMAIL: true, SMS: true, PUSH: true, WEBHOOK: true },
       locale: "en",
       quiet_hours: { start: "00:00", end: "23:59" },
     });
@@ -61,7 +61,7 @@ describe("ChannelRouter", () => {
       "tx.created" as never,
       "u@x.com",
       "user1",
-      { tx_id: "t1", traffic_class: "marketing" },
+      { tx_id: "t1", traffic_class: "MARKETING" },
     );
     expect(routes.every((r) => r.suppressed)).toBe(true);
     expect(routes[0].reason).toBe("quiet_hours");
@@ -69,7 +69,7 @@ describe("ChannelRouter", () => {
 
   it("lets transactional events bypass quiet hours", () => {
     upsertPreferences("user1", {
-      channels: { email: true, sms: true, push: true, webhook: true },
+      channels: { EMAIL: true, SMS: true, PUSH: true, WEBHOOK: true },
       locale: "en",
       quiet_hours: { start: "00:00", end: "23:59" },
     });
@@ -84,18 +84,18 @@ describe("ChannelRouter", () => {
 
   it("tags tx.* as transactional by default", () => {
     const routes = channelRouter.resolve("tx.created", "u@x.com", "u", { tx_id: "t" });
-    expect(routes[0].notification.traffic_class).toBe("transactional");
+    expect(routes[0].notification.traffic_class).toBe("TRANSACTIONAL");
   });
 
   it("uses default preference when none set", () => {
     const pref = defaultPreference("u");
-    expect(pref.channels.email).toBe(true);
+    expect(pref.channels.EMAIL).toBe(true);
   });
 
   it("detects quiet hours window", () => {
     const pref = {
       user_id: "u",
-      channels: { email: true, sms: true, push: true, webhook: true },
+      channels: { EMAIL: true, SMS: true, PUSH: true, WEBHOOK: true },
       locale: "en",
       quiet_hours: { start: "22:00", end: "06:00" },
     };

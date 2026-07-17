@@ -58,11 +58,11 @@ describe("List endpoints", () => {
 
   it("GET /v1/preferences returns all preferences sorted by user_id", async () => {
     upsertPreferences("userB", {
-      channels: { email: true, sms: false, push: true, webhook: false },
+      channels: { EMAIL: true, SMS: false, PUSH: true, WEBHOOK: false },
       locale: "en",
     });
     upsertPreferences("userA", {
-      channels: { email: false, sms: true, push: false, webhook: true },
+      channels: { EMAIL: false, SMS: true, PUSH: false, WEBHOOK: true },
       locale: "fr",
     });
     const app = buildApp();

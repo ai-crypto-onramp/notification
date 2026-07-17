@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { store, makeId } from "./store.js";
+import { store, newId } from "./store.js";
 import {
   upsertPreferences,
   getPreferences,
@@ -176,10 +176,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       if (notif) {
         notif.status = body.status as never;
         store.addAudit({
-          id: makeId("audit"),
+          id: newId(),
           type: "notification.delivered",
           notification_id: notif.id,
-          channel: "webhook",
+          channel: "WEBHOOK",
           status: body.status as never,
           created_at: new Date().toISOString(),
           payload: { confirmed_by: wh.id },

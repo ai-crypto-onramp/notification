@@ -2,7 +2,7 @@ import type { InboundEvent, ChannelName, Notification, AuditEvent } from "./type
 import { store } from "./store.js";
 import { channelRouter, sendRoute, resolveChannelSet } from "./router.js";
 import { getAuditEmitter } from "./audit.js";
-import { makeId } from "./store.js";
+import { newId } from "./store.js";
 
 const queue: InboundEvent[] = [];
 let processing = false;
@@ -43,11 +43,11 @@ export async function ingestEvent(event: InboundEvent): Promise<Notification[]> 
   for (const ch of candidateChannels) {
     if (store.isDuplicate(event.event_id, ch, event.recipient)) {
       const evt: AuditEvent = {
-        id: makeId("audit"),
+        id: newId(),
         type: "notification.suppressed",
         notification_id: null,
         channel: ch,
-        status: "suppressed",
+        status: "SUPPRESSED",
         created_at: new Date().toISOString(),
         payload: { reason: "duplicate", event_id: event.event_id, recipient: event.recipient },
       };

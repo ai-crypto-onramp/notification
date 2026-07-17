@@ -1,7 +1,7 @@
 import type { ChannelName, QuietHours, UserPreference } from "./types.js";
 import { store } from "./store.js";
 
-const VALID_CHANNELS: ChannelName[] = ["email", "sms", "push", "webhook"];
+const VALID_CHANNELS: ChannelName[] = ["EMAIL", "SMS", "PUSH", "WEBHOOK"];
 
 export interface UpsertPreferencesInput {
   channels: Record<ChannelName, boolean>;
@@ -25,10 +25,10 @@ export function upsertPreferences(
   const pref: UserPreference = {
     user_id: userId,
     channels: {
-      email: !!input.channels.email,
-      sms: !!input.channels.sms,
-      push: !!input.channels.push,
-      webhook: !!input.channels.webhook,
+      EMAIL: !!input.channels.EMAIL,
+      SMS: !!input.channels.SMS,
+      PUSH: !!input.channels.PUSH,
+      WEBHOOK: !!input.channels.WEBHOOK,
     },
     locale: input.locale ?? "en",
     quiet_hours: input.quiet_hours ?? null,

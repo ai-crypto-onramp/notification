@@ -91,16 +91,16 @@ describe("platformForToken + buildPushPayload", () => {
 describe("mapProviderError", () => {
   it("maps throttled errors to throttled status", () => {
     const r = mapProviderError("ses", new Error("Throttling: rate exceeded"));
-    expect(r.status).toBe("throttled");
+    expect(r.status).toBe("THROTTLED");
     expect(r.provider).toBe("ses");
   });
   it("maps unregistered token to bounced", () => {
     const r = mapProviderError("fcm", new Error("NotRegistered"));
-    expect(r.status).toBe("bounced");
+    expect(r.status).toBe("BOUNCED");
   });
   it("maps unknown errors to failed", () => {
     const r = mapProviderError("sns", new Error("something broke"));
-    expect(r.status).toBe("failed");
+    expect(r.status).toBe("FAILED");
     expect(r.error).toBe("something broke");
   });
 });
@@ -109,7 +109,7 @@ describe("stub providers", () => {
   it("StubSesProvider returns delivered and records id", async () => {
     const p = new StubSesProvider();
     const r = await p.send({ to: "a@b.com", subject: "s", text: "t", html: "", notificationId: "n1" });
-    expect(r.status).toBe("delivered");
+    expect(r.status).toBe("DELIVERED");
     expect(r.provider).toBe("ses");
     expect(p.sent.length).toBe(1);
   });
@@ -117,7 +117,7 @@ describe("stub providers", () => {
     const p = new StubSesProvider();
     p.fail = true;
     const r = await p.send({ to: "a@b.com", subject: "s", text: "t", html: "", notificationId: "n2" });
-    expect(r.status).toBe("throttled");
+    expect(r.status).toBe("THROTTLED");
   });
   it("StubSnsProvider + StubTwilioProvider return delivered", async () => {
     expect((await new StubSnsProvider().send({ to: "+1", body: "b", notificationId: "n" })).provider).toBe("sns");
@@ -141,7 +141,7 @@ describe("EmailChannel provider injection", () => {
       to: "x@y.com", subject: "s", text: "t", html: "", short: "t",
       event_type: "tx.created", notification_id: "err1",
     });
-    expect(r.status).toBe("throttled");
+    expect(r.status).toBe("THROTTLED");
     expect(store.attempts[0].error).toBe("SES throttled");
   });
   it("uses fromAddress from config", () => {
@@ -200,6 +200,6 @@ describe("PushChannel device resolution + payload shapes", () => {
       to: "u3", subject: "T", text: "", html: "", short: "B",
       event_type: "tx.confirmed", notification_id: "p2",
     });
-    expect(r.status).toBe("bounced");
+    expect(r.status).toBe("BOUNCED");
   });
 });
