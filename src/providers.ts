@@ -283,6 +283,6 @@ export function loadWebhookDefaults() {
     maxAttempts: Number(process.env.WEBHOOK_MAX_ATTEMPTS ?? 5),
     batchWindowMs: Number(process.env.WEBHOOK_BATCH_WINDOW_MS ?? 1000),
     defaultSecret: process.env.PARTNER_WEBHOOK_SECRET ?? "",
-    auditUrl: process.env.AUDIT_EVENT_LOG_URL ?? "",
+    kafkaBrokers: process.env.KAFKA_BROKERS ?? "",
   };
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import app, { start } from "./index.js";
 import { inMemoryBus, consumer } from "./consumer.js";
 
@@ -16,9 +16,14 @@ describe("GET /healthz", () => {
 });
 
 describe("start", () => {
+  beforeEach(() => {
+    process.env.DEV_MODE = "1";
+    delete process.env.KAFKA_BROKERS;
+  });
   afterEach(async () => {
     vi.restoreAllMocks();
     delete process.env.PORT;
+    delete process.env.DEV_MODE;
     inMemoryBus.reset();
     await consumer.stop();
   });
