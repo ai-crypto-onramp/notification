@@ -7,7 +7,7 @@ import type {
 } from "./types.js";
 import { store, makeId } from "./store.js";
 import { RateLimiter, envRps } from "./ratelimit.js";
-import { signWebhookPayload } from "./webhooks.js";
+import { signWebhookPayload, getWebhookFetch } from "./webhooks.js";
 import {
   type SesProvider,
   type SnsProvider,
@@ -322,12 +322,32 @@ export class WebhookChannel implements Channel {
     };
     const rawBody = JSON.stringify(coalesced);
     const { signature, timestamp } = signWebhookPayload(secret, rawBody);
-    void url;
-    void signature;
-    void timestamp;
     const provider_message_id = `webhook_${makeId("msg")}`;
-    const status: DeliveryResult["status"] = opts.simulateFailure ? "FAILED" : "DELIVERED";
-    // Record a single delivery attempt for the batch (per partner window).
+    let status: DeliveryResult["status"] = "DELIVERED";
+    let error: string | null = null;
+    if (opts.simulateFailure) {
+      status = "FAILED";
+      error = "batch failed";
+    } else {
+      try {
+        const resp = await getWebhookFetch()(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Timestamp": timestamp,
+            "X-Webhook-Signature": signature,
+          },
+          body: rawBody,
+        });
+        if (!resp.ok) {
+          status = "FAILED";
+          error = `HTTP ${resp.status}`;
+        }
+      } catch (err) {
+        status = "FAILED";
+        error = (err as Error).message;
+      }
+    }
     store.webhookDeliveries.set(provider_message_id, [
       { attempt_no: 1, status, at: new Date().toISOString() },
     ]);
@@ -336,7 +356,7 @@ export class WebhookChannel implements Channel {
         provider,
         provider_message_id,
         status,
-        error: opts.simulateFailure ? "batch failed" : null,
+        error,
       };
       recordAttempt(item.message.notification_id, this.name, provider, result, 1);
       item.resolve(result);
@@ -351,23 +371,46 @@ export class WebhookChannel implements Channel {
     secret: string,
     simulateFailure?: boolean,
   ): Promise<DeliveryResult> {
-    const payload = JSON.stringify({
+    const payload = {
       event_type: message.event_type,
       notification_id: message.notification_id,
       subject: message.subject,
       text: message.text,
       short: message.short,
-    });
-    const { signature, timestamp } = signWebhookPayload(secret, payload);
-    void url;
-    void signature;
-    void timestamp;
+    };
+    const rawBody = JSON.stringify(payload);
+    const { signature, timestamp } = signWebhookPayload(secret, rawBody);
     const provider_message_id = `webhook_${makeId("msg")}`;
+    let status: DeliveryResult["status"] = "DELIVERED";
+    let error: string | null = null;
+    if (simulateFailure) {
+      status = "FAILED";
+      error = "failed";
+    } else {
+      try {
+        const resp = await getWebhookFetch()(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Timestamp": timestamp,
+            "X-Webhook-Signature": signature,
+          },
+          body: rawBody,
+        });
+        if (!resp.ok) {
+          status = "FAILED";
+          error = `HTTP ${resp.status}`;
+        }
+      } catch (err) {
+        status = "FAILED";
+        error = (err as Error).message;
+      }
+    }
     const result: DeliveryResult = {
       provider,
       provider_message_id,
-      status: simulateFailure ? "FAILED" : "DELIVERED",
-      error: simulateFailure ? "failed" : null,
+      status,
+      error,
     };
     recordAttempt(message.notification_id, this.name, provider, result, 1);
     store.webhookDeliveries.set(provider_message_id, [

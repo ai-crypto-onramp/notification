@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { store } from "./store.js";
 import { buildApp } from "./app.js";
 import { getRateLimiter } from "./channels.js";
@@ -7,11 +7,13 @@ import { emailChannel, smsChannel, pushChannel, webhookChannel } from "./channel
 import { ingestEvent, _resetQueue } from "./pipeline.js";
 import { templateService } from "./templates.js";
 import { consumer, inMemoryBus } from "./consumer.js";
+import { setWebhookFetch } from "./webhooks.js";
 
 describe("Channels (in-memory sends)", () => {
   beforeEach(() => {
     store.reset();
     templateService.invalidate();
+    setWebhookFetch(vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response) as never);
   });
 
   it("email channel records a delivery attempt", async () => {

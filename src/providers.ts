@@ -1,5 +1,12 @@
 import { envRps } from "./ratelimit.js";
 import type { DeliveryResult } from "./types.js";
+import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
+import twilio from "twilio";
+import * as admin from "firebase-admin";
+import { getMessaging } from "firebase-admin/messaging";
+import apn from "@parse/node-apn";
+import { readFileSync } from "node:fs";
 
 /**
  * Stage 5 / 6: provider interfaces + config loaders + error mapping.
@@ -54,6 +61,38 @@ export class StubSesProvider implements SesProvider {
   }
 }
 
+/** Real SES provider backed by @aws-sdk/client-ses. */
+export class RealSesProvider implements SesProvider {
+  private client: SESClient;
+  constructor(cfg: SesConfig) {
+    this.client = new SESClient({ region: cfg.region });
+  }
+  async send(input: SesSendInput): Promise<DeliveryResult> {
+    try {
+      const cmd = new SendEmailCommand({
+        Source: loadSesConfig().from,
+        Destination: { ToAddresses: [input.to] },
+        Message: {
+          Subject: { Data: input.subject },
+          Body: {
+            Text: { Data: input.text },
+            Html: { Data: input.html },
+          },
+        },
+      });
+      const res = await this.client.send(cmd);
+      return {
+        provider: "ses",
+        provider_message_id: res.MessageId ?? "",
+        status: "DELIVERED",
+        error: null,
+      };
+    } catch (err) {
+      return mapProviderError("ses", err);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // SMS — Amazon SNS (US) / Twilio (international)
 // ---------------------------------------------------------------------------
@@ -105,6 +144,31 @@ export class StubSnsProvider implements SnsProvider {
   }
 }
 
+/** Real SNS SMS provider backed by @aws-sdk/client-sns. */
+export class RealSnsProvider implements SnsProvider {
+  private client: SNSClient;
+  constructor(region: string) {
+    this.client = new SNSClient({ region });
+  }
+  async send(input: SmsSendInput): Promise<DeliveryResult> {
+    try {
+      const cmd = new PublishCommand({
+        PhoneNumber: input.to,
+        Message: input.body,
+      });
+      const res = await this.client.send(cmd);
+      return {
+        provider: "sns",
+        provider_message_id: res.MessageId ?? "",
+        status: "DELIVERED",
+        error: null,
+      };
+    } catch (err) {
+      return mapProviderError("sns", err);
+    }
+  }
+}
+
 export class StubTwilioProvider implements TwilioProvider {
   sent: SmsSendInput[] = [];
   async send(input: SmsSendInput): Promise<DeliveryResult> {
@@ -115,6 +179,33 @@ export class StubTwilioProvider implements TwilioProvider {
       status: "DELIVERED",
       error: null,
     };
+  }
+}
+
+/** Real Twilio SMS provider. */
+export class RealTwilioProvider implements TwilioProvider {
+  private client: twilio.Twilio;
+  private from: string;
+  constructor(cfg: SmsConfig) {
+    this.client = twilio(cfg.twilioSid, cfg.twilioToken);
+    this.from = cfg.twilioFrom;
+  }
+  async send(input: SmsSendInput): Promise<DeliveryResult> {
+    try {
+      const res = await this.client.messages.create({
+        to: input.to,
+        from: this.from,
+        body: input.body,
+      });
+      return {
+        provider: "twilio",
+        provider_message_id: res.sid ?? "",
+        status: "DELIVERED",
+        error: null,
+      };
+    } catch (err) {
+      return mapProviderError("twilio", err);
+    }
   }
 }
 
@@ -204,6 +295,36 @@ export class StubFcmProvider implements FcmProvider {
   }
 }
 
+/** Real FCM provider backed by firebase-admin. */
+export class RealFcmProvider implements FcmProvider {
+  private app: admin.App;
+  constructor(cfg: FcmConfig) {
+    if (process.env.FCM_KEY_PATH) {
+      const raw = readFileSync(process.env.FCM_KEY_PATH, "utf8");
+      this.app = admin.initializeApp({ credential: admin.cert(JSON.parse(raw)) });
+    } else {
+      this.app = admin.initializeApp({ credential: admin.cert(JSON.parse(cfg.key)) });
+    }
+  }
+  async send(input: PushSendInput): Promise<DeliveryResult> {
+    try {
+      const res = await getMessaging(this.app).send({
+        notification: { title: input.title, body: input.body },
+        token: input.token,
+        data: { notification_id: input.notificationId },
+      });
+      return {
+        provider: "fcm",
+        provider_message_id: res,
+        status: "DELIVERED",
+        error: null,
+      };
+    } catch (err) {
+      return mapProviderError("fcm", err);
+    }
+  }
+}
+
 export class StubApnsProvider implements ApnsProvider {
   sent: PushSendInput[] = [];
   async send(input: PushSendInput): Promise<DeliveryResult> {
@@ -214,6 +335,43 @@ export class StubApnsProvider implements ApnsProvider {
       status: "DELIVERED",
       error: null,
     };
+  }
+}
+
+/** Real APNS provider backed by @parse/node-apn. */
+export class RealApnsProvider implements ApnsProvider {
+  private provider: apn.Provider;
+  private bundleId: string;
+  constructor(cfg: ApnsConfig) {
+    this.provider = new apn.Provider({
+      token: {
+        key: readFileSync(cfg.privateKeyPath),
+        keyId: cfg.keyId,
+        teamId: cfg.teamId,
+      },
+    });
+    this.bundleId = cfg.bundleId;
+  }
+  async send(input: PushSendInput): Promise<DeliveryResult> {
+    try {
+      const notification = new apn.Notification();
+      notification.topic = this.bundleId;
+      notification.alert = { title: input.title, body: input.body };
+      notification.payload = input.data ?? {};
+      const res = await this.provider.send(notification, input.token);
+      if (res.failed && res.failed.length > 0) {
+        const f = res.failed[0];
+        return mapProviderError("apns", new Error(f.status ? String(f.status) : "apns failed"));
+      }
+      return {
+        provider: "apns",
+        provider_message_id: input.token.slice(0, 8),
+        status: "DELIVERED",
+        error: null,
+      };
+    } catch (err) {
+      return mapProviderError("apns", err);
+    }
   }
 }
 
@@ -285,4 +443,102 @@ export function loadWebhookDefaults() {
     defaultSecret: process.env.PARTNER_WEBHOOK_SECRET ?? "",
     kafkaBrokers: process.env.KAFKA_BROKERS ?? "",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Provider factory: real SDK clients when env vars are set, stubs in DEV_MODE,
+// fatal at startup otherwise. Mirrors the Phase 0 convention.
+// ---------------------------------------------------------------------------
+
+export interface ProviderLogger {
+  warn(msg: string): void;
+  error(msg: string): void;
+  info(msg: string): void;
+}
+
+export interface ProviderBundle {
+  ses: SesProvider;
+  sns: SnsProvider;
+  twilio: TwilioProvider;
+  fcm: FcmProvider;
+  apns: ApnsProvider;
+}
+
+export interface ProviderFactoryOptions {
+  devMode?: boolean;
+  logger?: ProviderLogger;
+  /** Override env reads (for tests). */
+  env?: Record<string, string | undefined>;
+}
+
+function envOr(opt: ProviderFactoryOptions, key: string): string | undefined {
+  if (opt.env) return opt.env[key];
+  return process.env[key];
+}
+
+function fatalMissing(opt: ProviderFactoryOptions, name: string, envs: string[]): never {
+  const msg = `Missing ${name} configuration (${envs.join(", ")}); refusing to start in production mode. Set DEV_MODE=1 to use stubs.`;
+  if (opt.logger) opt.logger.error(msg);
+  else console.error(msg);
+  process.exit(1);
+}
+
+/** Build the provider bundle from env. */
+export function createProviders(opt: ProviderFactoryOptions = {}): ProviderBundle {
+  const devMode = opt.devMode ?? process.env.DEV_MODE === "1";
+  const log = opt.logger ?? console;
+
+  // SES: needs SES_FROM (region defaults).
+  const sesFrom = envOr(opt, "SES_FROM");
+  if (sesFrom) {
+    const region = envOr(opt, "SES_REGION") ?? "us-east-1";
+    log.info?.(`SES provider: real (region=${region})`);
+  } else if (devMode) {
+    log.warn("DEV_MODE=1: SES_FROM unset — using StubSesProvider (NOT FOR PRODUCTION)");
+  } else {
+    fatalMissing(opt, "SES", ["SES_FROM"]);
+  }
+  const ses: SesProvider = sesFrom ? new RealSesProvider({ region: envOr(opt, "SES_REGION") ?? "us-east-1", from: sesFrom }) : new StubSesProvider();
+
+  // SNS: uses SNS_REGION (defaults), always available when AWS creds are present.
+  // We treat SNS as available when SNS_REGION is explicitly set OR devMode.
+  const snsRegion = envOr(opt, "SNS_REGION");
+  const sns: SnsProvider = snsRegion
+    ? new RealSnsProvider(snsRegion)
+    : (devMode ? new StubSnsProvider() : fatalMissing(opt, "SNS", ["SNS_REGION"]));
+
+  // Twilio: needs TWILIO_SID + TWILIO_TOKEN + TWILIO_FROM.
+  const twilioSid = envOr(opt, "TWILIO_SID");
+  const twilioToken = envOr(opt, "TWILIO_TOKEN");
+  const twilioFrom = envOr(opt, "TWILIO_FROM");
+  const twilio: TwilioProvider = (twilioSid && twilioToken && twilioFrom)
+    ? new RealTwilioProvider({
+        twilioSid,
+        twilioToken,
+        twilioFrom,
+        snsRegion: snsRegion ?? "us-east-1",
+      })
+    : (devMode ? new StubTwilioProvider() : fatalMissing(opt, "Twilio", ["TWILIO_SID", "TWILIO_TOKEN", "TWILIO_FROM"]));
+
+  // FCM: needs FCM_KEY or FCM_KEY_PATH.
+  const fcmKey = envOr(opt, "FCM_KEY");
+  const fcmKeyPath = envOr(opt, "FCM_KEY_PATH");
+  const fcm: FcmProvider = (fcmKey || fcmKeyPath)
+    ? new RealFcmProvider({ key: fcmKey ?? "" })
+    : (devMode ? new StubFcmProvider() : fatalMissing(opt, "FCM", ["FCM_KEY", "FCM_KEY_PATH"]));
+
+  // APNS: needs APNS_TEAM_ID + APNS_KEY_ID + APNS_PRIVATE_KEY_PATH (bundle defaults).
+  const apnsTeamId = envOr(opt, "APNS_TEAM_ID");
+  const apnsKeyId = envOr(opt, "APNS_KEY_ID");
+  const apnsKeyPath = envOr(opt, "APNS_PRIVATE_KEY_PATH");
+  const apns: ApnsProvider = (apnsTeamId && apnsKeyId && apnsKeyPath)
+    ? new RealApnsProvider({
+        teamId: apnsTeamId,
+        keyId: apnsKeyId,
+        privateKeyPath: apnsKeyPath,
+        bundleId: envOr(opt, "APNS_BUNDLE_ID") ?? "com.example.onramp",
+      })
+    : (devMode ? new StubApnsProvider() : fatalMissing(opt, "APNS", ["APNS_TEAM_ID", "APNS_KEY_ID", "APNS_PRIVATE_KEY_PATH"]));
+
+  return { ses, sns, twilio, fcm, apns };
 }

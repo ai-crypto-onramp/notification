@@ -1,10 +1,16 @@
-import { beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   StubSesProvider,
   StubSnsProvider,
   StubTwilioProvider,
   StubFcmProvider,
   StubApnsProvider,
+  RealSesProvider,
+  RealSnsProvider,
+  RealTwilioProvider,
+  RealFcmProvider,
+  RealApnsProvider,
+  createProviders,
   loadSesConfig,
   loadSmsConfig,
   loadFcmConfig,
@@ -201,5 +207,110 @@ describe("PushChannel device resolution + payload shapes", () => {
       event_type: "tx.confirmed", notification_id: "p2",
     });
     expect(r.status).toBe("BOUNCED");
+  });
+});
+
+describe("createProviders factory", () => {
+  const envBackup = { ...process.env };
+
+  afterEach(() => {
+    for (const k of Object.keys(process.env)) delete process.env[k];
+    for (const [k, v] of Object.entries(envBackup)) process.env[k] = v;
+  });
+
+  it("returns real SES/SNS/Twilio + stub FCM/APNS when only those env vars are set", () => {
+    const bundle = createProviders({
+      devMode: true,
+      env: {
+        SES_FROM: "noreply@example.com",
+        SES_REGION: "eu-west-1",
+        SNS_REGION: "eu-west-1",
+        TWILIO_SID: "ACxxx",
+        TWILIO_TOKEN: "tok",
+        TWILIO_FROM: "+15555550100",
+      },
+    });
+    expect(bundle.ses).toBeInstanceOf(RealSesProvider);
+    expect(bundle.sns).toBeInstanceOf(RealSnsProvider);
+    expect(bundle.twilio).toBeInstanceOf(RealTwilioProvider);
+    // FCM/APNS env unset → stubs because DEV_MODE=1.
+    expect(bundle.fcm).toBeInstanceOf(StubFcmProvider);
+    expect(bundle.apns).toBeInstanceOf(StubApnsProvider);
+  });
+
+  it("returns real FCM/APNS when valid key env is set (SDK mocked)", async () => {
+    const { default: admin } = await import("firebase-admin");
+    const apnMod = await import("@parse/node-apn");
+    const initSpy = vi.spyOn(admin, "initializeApp").mockReturnValue({} as never);
+    const certSpy = vi.spyOn(admin, "cert").mockReturnValue({} as never);
+    // Spy on Provider.prototype.send so real construction works but the
+    // network call is mocked.
+    const sendSpy = vi.spyOn(apnMod.Provider.prototype, "send")
+      .mockResolvedValue({ sent: [], failed: [] } as never);
+    const tmpKey = await import("node:os");
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { execSync } = await import("node:child_process");
+    const keyFile = path.join(tmpKey.tmpdir(), `apns-key-${Date.now()}.p8`);
+    // Generate a real ES256 private key so @parse/node-apn's constructor
+    // (which prepares a JWT) succeeds.
+    const tmpEc = path.join(tmpKey.tmpdir(), `apns-ec-${Date.now()}.pem`);
+    execSync(`openssl ecparam -name prime256v1 -genkey -noout -out ${tmpEc}`);
+    execSync(`openssl pkcs8 -topk8 -nocrypt -in ${tmpEc} -out ${keyFile}`);
+    fs.unlinkSync(tmpEc);
+    try {
+      const bundle = createProviders({
+        devMode: false,
+        env: {
+          SES_FROM: "noreply@example.com",
+          SNS_REGION: "eu-west-1",
+          TWILIO_SID: "ACxxx",
+          TWILIO_TOKEN: "tok",
+          TWILIO_FROM: "+15555550100",
+          FCM_KEY: JSON.stringify({ type: "service_account", project_id: "x" }),
+          APNS_TEAM_ID: "team",
+          APNS_KEY_ID: "key",
+          APNS_PRIVATE_KEY_PATH: keyFile,
+          APNS_BUNDLE_ID: "com.example.app",
+        },
+      });
+      expect(bundle.ses).toBeInstanceOf(RealSesProvider);
+      expect(bundle.fcm).toBeInstanceOf(RealFcmProvider);
+      expect(bundle.apns).toBeInstanceOf(RealApnsProvider);
+      expect(initSpy).toHaveBeenCalled();
+      // Exercise the apns send path to confirm the spy is wired.
+      const r = await bundle.apns.send({
+        token: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        platform: "ios",
+        title: "T",
+        body: "B",
+        notificationId: "n-apns",
+      });
+      expect(sendSpy).toHaveBeenCalled();
+      expect(r.provider).toBe("apns");
+    } finally {
+      initSpy.mockRestore();
+      certSpy.mockRestore();
+      sendSpy.mockRestore();
+      try { fs.unlinkSync(keyFile); } catch { /* ignore */ }
+    }
+  });
+
+  it("returns stub providers when DEV_MODE=1 and env is unset", () => {
+    const bundle = createProviders({ devMode: true, env: {} });
+    expect(bundle.ses).toBeInstanceOf(StubSesProvider);
+    expect(bundle.sns).toBeInstanceOf(StubSnsProvider);
+    expect(bundle.twilio).toBeInstanceOf(StubTwilioProvider);
+    expect(bundle.fcm).toBeInstanceOf(StubFcmProvider);
+    expect(bundle.apns).toBeInstanceOf(StubApnsProvider);
+  });
+
+  it("calls process.exit(1) when prod + missing config", () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
+    createProviders({ devMode: false, env: {}, logger });
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(logger.error).toHaveBeenCalled();
+    exitSpy.mockRestore();
   });
 });

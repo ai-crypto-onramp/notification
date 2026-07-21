@@ -9,10 +9,24 @@ import {
   registerWebhook,
   deliverWithBackoff,
   DEFAULT_BACKOFF_MS,
+  setWebhookFetch,
+  setWebhookSleep,
+  setWebhookDlqSink,
+  dlqEntries,
 } from "./webhooks.js";
+import type { DlqSink } from "./dlq.js";
 
 describe("Webhooks", () => {
-  beforeEach(() => store.reset());
+  beforeEach(() => {
+    store.reset();
+    setWebhookSleep(() => Promise.resolve());
+    dlqEntries.length = 0;
+  });
+  afterEach(() => {
+    setWebhookFetch(null);
+    setWebhookSleep(null);
+    setWebhookDlqSink(null);
+  });
 
   it("signs and verifies HMAC payloads", () => {
     const secret = "topsecret";
@@ -76,9 +90,53 @@ describe("Webhooks", () => {
 
   it("delivers on first success", async () => {
     const wh = registerWebhook({ url: "https://p/h", secret: "s" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response);
+    setWebhookFetch(fetchMock as never);
     const { delivered, attempts } = await deliverWithBackoff(wh, { event: "x" });
     expect(delivered).toBe(true);
     expect(attempts.length).toBe(1);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://p/h");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["X-Webhook-Signature"]).toBeTruthy();
+  });
+
+  it("retries on 5xx and succeeds on second attempt", async () => {
+    const wh = registerWebhook({
+      url: "https://p/h",
+      secret: "s",
+      retry_policy: { max_attempts: 3, backoff_ms: [10, 20, 40] },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
+      .mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+    setWebhookFetch(fetchMock as never);
+    const { delivered, attempts } = await deliverWithBackoff(wh, { event: "x" });
+    expect(delivered).toBe(true);
+    expect(attempts.length).toBe(2);
+    expect(attempts[0].status).toBe("FAILED");
+    expect(attempts[1].status).toBe("DELIVERED");
+  });
+
+  it("sends to DLQ on final failure", async () => {
+    const wh = registerWebhook({
+      url: "https://p/h",
+      secret: "s",
+      retry_policy: { max_attempts: 2, backoff_ms: [10, 20] },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
+    setWebhookFetch(fetchMock as never);
+    const sink: DlqSink = { send: vi.fn().mockResolvedValue(undefined) };
+    setWebhookDlqSink(sink);
+    const { delivered, attempts } = await deliverWithBackoff(wh, { event: "x", notification_id: "n-dlq" });
+    expect(delivered).toBe(false);
+    expect(attempts.length).toBe(2);
+    expect(sink.send).toHaveBeenCalledOnce();
+    const sendMock = sink.send as unknown as { mock: { calls: unknown[][] } };
+    const entry = sendMock.mock.calls[0][0] as { reason: string; notification_id: string };
+    expect(entry.notification_id).toBe("n-dlq");
+    expect(entry.reason).toMatch(/HTTP 500/);
   });
 
   it("uses default backoff schedule", () => {
@@ -141,9 +199,12 @@ describe("WebhookChannel batch coalescing", () => {
   beforeEach(() => {
     store.reset();
     templateService.invalidate();
+    setWebhookFetch(vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response) as never);
+    dlqEntries.length = 0;
   });
   afterEach(() => {
     vi.useRealTimers();
+    setWebhookFetch(null);
   });
 
   it("coalesces a burst of sends for the same partner into one batch", async () => {

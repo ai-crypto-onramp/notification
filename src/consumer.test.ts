@@ -10,6 +10,7 @@ import {
 } from "./consumer.js";
 import { _resetQueue } from "./pipeline.js";
 import { templateService } from "./templates.js";
+import { InMemoryRedis, inMemoryRedis, setRedis } from "./redis.js";
 
 const goodEvent: RawBusEvent = {
   event_id: "e1",
@@ -116,5 +117,25 @@ describe("EventBusConsumer", () => {
     expect(store.notifications.size).toBeGreaterThanOrEqual(2);
     await consumer.stop();
     expect(consumer.isSubscribed()).toBe(false);
+  });
+
+  it("skips duplicate event_ids (Redis dedup)", async () => {
+    const dedupRedis = new InMemoryRedis();
+    setRedis(dedupRedis);
+    try {
+      bus = new InMemoryEventBus();
+      c = new EventBusConsumer(bus, { group: "notification", busUrl: "test://bus" });
+      await c.start();
+      await bus.publish(goodEvent);
+      await new Promise((r) => setImmediate(r));
+      const firstCount = store.notifications.size;
+      expect(firstCount).toBeGreaterThanOrEqual(2);
+      // Publish the same event_id again; should be dedup'd.
+      await bus.publish(goodEvent);
+      await new Promise((r) => setImmediate(r));
+      expect(store.notifications.size).toBe(firstCount);
+    } finally {
+      setRedis(inMemoryRedis);
+    }
   });
 });

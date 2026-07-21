@@ -1,5 +1,6 @@
 import type { InboundEvent, EventType } from "./types.js";
 import { enqueueEvent } from "./pipeline.js";
+import { getRedis } from "./redis.js";
 
 /**
  * Stage 2: event bus consumer.
@@ -187,8 +188,19 @@ export class EventBusConsumer {
   }
 
   private onEvent = async (raw: RawBusEvent): Promise<void> => {
+    // Redis-backed dedup: skip if this event_id has already been processed.
+    // Falls back to in-memory store dedup when REDIS_URL is unset (DEV_MODE).
+    const dedupEventKey = `notif:dedup:${raw.event_id}`;
+    const redis = getRedis();
+    const existing = await redis.get(dedupEventKey);
+    if (existing) {
+      // Duplicate — skip.
+      return;
+    }
     const event = this.normalize(raw);
     enqueueEvent(event);
+    // Mark processed only after enqueue succeeded. 24h TTL.
+    await redis.set(dedupEventKey, "1", 86_400_000);
   };
 }
 
