@@ -3,6 +3,9 @@ import { consumer } from "./consumer.js";
 import { initAuditEmitterFromEnv } from "./audit.js";
 import { store } from "./store.js";
 import { initPg, applyMigrations, pgHydrate, closePg, pgEnabled } from "./pgstore.js";
+import { startTracing, shutdownTracing } from "./tracing.js";
+
+startTracing();
 
 const app = buildApp({ logger: true });
 
@@ -44,6 +47,7 @@ const shutdown = async () => {
     await consumer.stop();
     await app.close();
   } finally {
+    await shutdownTracing();
     await closePg();
     process.exit(0);
   }

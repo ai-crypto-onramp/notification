@@ -13,16 +13,27 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1091.0",
+    "@aws-sdk/client-sns": "^3.1091.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.78.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.220.0",
+    "@opentelemetry/sdk-node": "^0.220.0",
+    "@parse/node-apn": "^7.1.0",
     "fastify": "^4.26.0",
+    "firebase-admin": "^14.2.0",
     "handlebars": "^4.7.9",
+    "ioredis": "^5.11.1",
     "kafkajs": "^2.2.4",
     "pg": "^8.22.0",
+    "twilio": "^6.0.2",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/handlebars": "^4.0.40",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.20.0",
+    "@types/twilio": "^3.19.2",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
