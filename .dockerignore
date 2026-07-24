@@ -1,0 +1,18 @@
+# Build artifacts
+node_modules/
+dist/
+coverage/
+
+# Env & secrets
+.env
+.env.local
+*.log
+
+# Git & metadata
+.git/
+.gitignore
+.github/
+README.md
+
+# OS noise
+.DS_Store

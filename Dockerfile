@@ -1,7 +1,9 @@
+# syntax=docker/dockerfile:1.6
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 COPY . .
 RUN npm run build
 
