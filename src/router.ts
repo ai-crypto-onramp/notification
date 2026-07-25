@@ -64,7 +64,17 @@ export class ChannelRouter {
       const optedIn = channel.verifyPreference(pref);
       const locale = (data.locale as string) ?? pref.locale ?? "en";
       const id = newId();
-      const message = buildMessage(eventType, channelName, locale, recipient, data, id);
+      const message = channelName === "WEBHOOK"
+        ? {
+            to: recipient,
+            subject: eventType,
+            text: JSON.stringify(data),
+            html: "",
+            short: eventType,
+            event_type: eventType,
+            notification_id: id,
+          }
+        : buildMessage(eventType, channelName, locale, recipient, data, id);
       if (!message) continue;
       const notification: Notification = {
         id,
