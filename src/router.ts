@@ -64,6 +64,8 @@ export class ChannelRouter {
       const optedIn = channel.verifyPreference(pref);
       const locale = (data.locale as string) ?? pref.locale ?? "en";
       const id = newId();
+      const message = buildMessage(eventType, channelName, locale, recipient, data, id);
+      if (!message) continue;
       const notification: Notification = {
         id,
         event_id: String(data.event_id ?? ""),
@@ -88,7 +90,7 @@ export class ChannelRouter {
         });
         results.push({
           channel,
-          message: buildMessage(eventType, channelName, locale, recipient, data, id),
+          message,
           notification,
           suppressed: true,
           reason: "opted_out",
@@ -105,7 +107,7 @@ export class ChannelRouter {
         });
         results.push({
           channel,
-          message: buildMessage(eventType, channelName, locale, recipient, data, id),
+          message,
           notification,
           suppressed: true,
           reason: "quiet_hours",
@@ -121,7 +123,7 @@ export class ChannelRouter {
       });
       results.push({
         channel,
-        message: buildMessage(eventType, channelName, locale, recipient, data, id),
+        message,
         notification,
         suppressed: false,
       });

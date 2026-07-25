@@ -108,8 +108,13 @@ export function buildMessage(
   recipient: string,
   data: Record<string, unknown>,
   notificationId: string,
-): NotificationMessage {
-  const compiled = templateService.resolve(eventType, channel, locale, data);
+): NotificationMessage | null {
+  let compiled: CompiledTemplate;
+  try {
+    compiled = templateService.resolve(eventType, channel, locale, data);
+  } catch {
+    return null;
+  }
   return {
     to: recipient,
     subject: compiled.subject,
