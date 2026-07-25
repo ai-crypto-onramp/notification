@@ -130,7 +130,7 @@ function rowToWebhook(r: Record<string, unknown>): PartnerWebhook {
 function rowToTemplate(r: Record<string, unknown>): NotificationTemplate {
   return {
     event_type: String(r.event_type) as EventType,
-    channel: String(r.channel) as ChannelName,
+    channel: String(r.channel).toUpperCase() as ChannelName,
     locale: String(r.locale) as Locale,
     subject: String(r.subject ?? ""),
     text_body: String(r.text_body ?? ""),
