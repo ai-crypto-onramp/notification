@@ -143,17 +143,41 @@ function rowToTemplate(r: Record<string, unknown>): NotificationTemplate {
 export async function pgAddNotification(n: Notification): Promise<void> {
   const c = client();
   if (!c) return;
-  await c.query(
+  // Track the in-flight INSERT so pgAddAttempt can await it before inserting
+  // a delivery_attempts row that references this notification. Without this
+  // ordering the two fire-and-forget write-throughs race and the attempt
+  // INSERT fails with a foreign-key violation (the notification row isn't
+  // committed yet).
+  const p: Promise<void> = c.query(
     `INSERT INTO notifications (id, event_id, event_type, channel, recipient, user_id, template_id, status, traffic_class, locale, created_at, sent_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
      ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, sent_at = EXCLUDED.sent_at, updated_at = now()`,
     [n.id, n.event_id, n.event_type, n.channel, n.recipient, n.user_id, n.template_id, n.status, n.traffic_class, n.locale, n.created_at, n.sent_at],
-  );
+  ).then(() => undefined).finally(() => {
+    pendingNotifications.delete(n.id);
+  });
+  pendingNotifications.set(n.id, p);
+  await p;
 }
+
+// pendingNotifications tracks in-flight pgAddNotification INSERTs keyed by
+// notification id, so pgAddAttempt can await the parent row before inserting
+// a referencing delivery_attempts row.
+const pendingNotifications = new Map<string, Promise<void>>();
 
 export async function pgAddAttempt(a: DeliveryAttempt): Promise<void> {
   const c = client();
   if (!c) return;
+  // Wait for the parent notification INSERT to commit first.
+  const pending = pendingNotifications.get(a.notification_id);
+  if (pending) {
+    try {
+      await pending;
+    } catch {
+      // The notification INSERT failed; let the attempt INSERT fail with
+      // the FK violation (surfaced below) rather than masking it here.
+    }
+  }
   await c.query(
     `INSERT INTO delivery_attempts (id, notification_id, channel, provider, provider_message_id, status, attempt_no, error, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -166,10 +190,10 @@ export async function pgUpsertPreference(p: UserPreference): Promise<void> {
   const c = client();
   if (!c) return;
   await c.query(
-    `INSERT INTO user_preferences (user_id, email, sms, push, webhook, locale, quiet_start, quiet_end, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+    `INSERT INTO user_preferences (id, user_id, email, sms, push, webhook, locale, quiet_start, quiet_end, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
      ON CONFLICT (user_id) DO UPDATE SET email=EXCLUDED.email, sms=EXCLUDED.sms, push=EXCLUDED.push, webhook=EXCLUDED.webhook, locale=EXCLUDED.locale, quiet_start=EXCLUDED.quiet_start, quiet_end=EXCLUDED.quiet_end, updated_at=now()`,
-    [p.user_id, p.channels.EMAIL, p.channels.SMS, p.channels.PUSH, p.channels.WEBHOOK, p.locale, p.quiet_hours?.start ?? null, p.quiet_hours?.end ?? null],
+    [uuidv7(), p.user_id, p.channels.EMAIL, p.channels.SMS, p.channels.PUSH, p.channels.WEBHOOK, p.locale, p.quiet_hours?.start ?? null, p.quiet_hours?.end ?? null],
   );
 }
 
