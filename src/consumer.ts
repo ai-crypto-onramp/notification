@@ -148,6 +148,20 @@ export class EventBusConsumer {
     this.started = false;
   }
 
+  /**
+   * Swap the underlying bus. Used by the runtime to rebind the singleton
+   * (used by /readyz) to the real KafkaBus in production so that readiness
+   * reflects the live consumer instead of the dev-only InMemoryEventBus.
+   * Stops the previous bus if currently started.
+   */
+  async replaceBus(bus: EventBusClient): Promise<void> {
+    if (this.started) {
+      await this.bus.unsubscribe();
+      this.started = false;
+    }
+    this.bus = bus;
+  }
+
   isSubscribed(): boolean {
     return this.bus.subscribed();
   }

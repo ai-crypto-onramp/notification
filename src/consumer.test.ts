@@ -119,6 +119,26 @@ describe("EventBusConsumer", () => {
     expect(consumer.isSubscribed()).toBe(false);
   });
 
+  it("replaceBus rebinds the singleton to a new bus and /readyz reflects it", async () => {
+    inMemoryBus.reset();
+    await consumer.stop();
+    // Start on the default in-memory bus.
+    await consumer.start();
+    expect(consumer.isSubscribed()).toBe(true);
+    // Swap to a fresh in-memory bus (simulates Kafka rebind in prod).
+    const newBus = new InMemoryEventBus();
+    await consumer.replaceBus(newBus);
+    expect(consumer.isSubscribed()).toBe(false);
+    expect(consumer.readiness().ready).toBe(false);
+    await consumer.start();
+    expect(consumer.isSubscribed()).toBe(true);
+    expect(consumer.readiness().ready).toBe(true);
+    await newBus.publish(goodEvent);
+    await new Promise((r) => setImmediate(r));
+    expect(store.notifications.size).toBeGreaterThanOrEqual(2);
+    await consumer.stop();
+  });
+
   it("skips duplicate event_ids (Redis dedup)", async () => {
     const dedupRedis = new InMemoryRedis();
     setRedis(dedupRedis);

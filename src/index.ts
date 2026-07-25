@@ -1,5 +1,5 @@
 import { buildApp } from "./app.js";
-import { consumer, EventBusConsumer } from "./consumer.js";
+import { consumer } from "./consumer.js";
 import { KafkaBus } from "./kafka-bus.js";
 import { initAuditEmitterFromEnv } from "./audit.js";
 import { store } from "./store.js";
@@ -39,11 +39,11 @@ export const start = async () => {
     if (process.env.KAFKA_BROKERS) {
       app.log.info(`KAFKA_BROKERS set; wiring KafkaBus (${process.env.KAFKA_BROKERS})`);
       const bus = new KafkaBus({ brokers: process.env.KAFKA_BROKERS.split(",").map((s) => s.trim()) });
-      const realConsumer = new EventBusConsumer(bus, { group: process.env.EVENT_CONSUMER_GROUP ?? "notification" });
-      // Replace the singleton consumer's bus by re-binding start/stop to the real bus.
-      await realConsumer.start();
-      // Keep the imported `consumer` singleton subscribed for /readyz parity in dev mode.
-      if (devMode) await consumer.start();
+      // Rebind the singleton consumer to the real KafkaBus so /readyz reports
+      // against the live consumer (app.ts reads the singleton). This replaces
+      // the dev-only InMemoryEventBus bound at module load.
+      await consumer.replaceBus(bus);
+      await consumer.start();
     } else if (process.env.EVENT_BUS_URL) {
       app.log.info("EVENT_BUS_URL set; real event bus client not yet wired — keeping in-memory bus");
       await consumer.start();
