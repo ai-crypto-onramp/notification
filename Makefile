@@ -13,10 +13,10 @@ lint:
 	npm run lint
 
 docker-build:
-	docker build -t ai-crypto-onramp/notification .
+	docker build -t ai-crypto-onramp/notifier .
 
 docker-run:
-	docker run --rm -p 8080:8080 ai-crypto-onramp/notification
+	docker run --rm -p 8080:8080 ai-crypto-onramp/notifier
 
 clean:
 	rm -rf dist node_modules coverage
