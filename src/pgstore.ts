@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { v7 as uuidv7 } from "uuid";
 import type { DbClient } from "./db.js";
 import { MigrationRunner } from "./db.js";
 import type { Store } from "./store.js";
@@ -154,10 +155,10 @@ export async function pgAddAttempt(a: DeliveryAttempt): Promise<void> {
   const c = client();
   if (!c) return;
   await c.query(
-    `INSERT INTO delivery_attempts (notification_id, channel, provider, provider_message_id, status, attempt_no, error, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO delivery_attempts (id, notification_id, channel, provider, provider_message_id, status, attempt_no, error, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      ON CONFLICT DO NOTHING`,
-    [a.notification_id, a.channel, a.provider, a.provider_message_id, a.status, a.attempt_no, a.error, a.created_at, a.updated_at],
+    [uuidv7(), a.notification_id, a.channel, a.provider, a.provider_message_id, a.status, a.attempt_no, a.error, a.created_at, a.updated_at],
   );
 }
 
