@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { store, newId } from "./store.js";
+import { makeAuthHook, resolveAuth } from "./authtoken.js";
 import {
   upsertPreferences,
   getPreferences,
@@ -25,6 +26,7 @@ export interface AppOptions {
 
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: opts.logger ?? false });
+  app.addHook("onRequest", makeAuthHook(resolveAuth()) as never);
 
   app.get("/healthz", async () => ({ status: "ok" }));
 

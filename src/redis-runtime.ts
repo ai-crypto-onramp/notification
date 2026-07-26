@@ -36,7 +36,14 @@ let active: IoredisAdapter | null = null;
 
 export function initRedis(url?: string): void {
   const u = url ?? process.env.REDIS_URL;
-  if (!u) return;
+  if (!u) {
+    if (process.env.DEV_MODE === "1") {
+      console.warn("REDIS_URL unset and DEV_MODE=1; using in-memory Redis fake (NOT FOR PRODUCTION)");
+      return;
+    }
+    console.error("REDIS_URL unset and DEV_MODE!=1; refusing to start in production mode");
+    process.exit(1);
+  }
   active = new IoredisAdapter(u);
   setRedis(active);
 }

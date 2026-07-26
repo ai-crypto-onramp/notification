@@ -9,6 +9,19 @@ import { createProviders } from "./providers.js";
 import { emailChannel, smsChannel, pushChannel } from "./channels.js";
 import { initRedis, closeRedis } from "./redis-runtime.js";
 
+function parseKafkaBrokersFromUrl(url?: string): string[] {
+  if (!url) return [];
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "kafka:") return [];
+    const host = parsed.hostname;
+    const port = parsed.port || "9092";
+    return host ? [`${host}:${port}`] : [];
+  } catch {
+    return [];
+  }
+}
+
 startTracing();
 
 const app = buildApp({ logger: true });
@@ -36,16 +49,13 @@ export const start = async () => {
   smsChannel.setProviders(providers.sns, providers.twilio);
   pushChannel.setProviders(providers.fcm, providers.apns);
   try {
-    if (process.env.KAFKA_BROKERS) {
-      app.log.info(`KAFKA_BROKERS set; wiring KafkaBus (${process.env.KAFKA_BROKERS})`);
-      const bus = new KafkaBus({ brokers: process.env.KAFKA_BROKERS.split(",").map((s) => s.trim()) });
-      // Rebind the singleton consumer to the real KafkaBus so /readyz reports
-      // against the live consumer (app.ts reads the singleton). This replaces
-      // the dev-only InMemoryEventBus bound at module load.
+    const brokers = process.env.KAFKA_BROKERS
+      ? process.env.KAFKA_BROKERS.split(",").map((s) => s.trim()).filter(Boolean)
+      : parseKafkaBrokersFromUrl(process.env.EVENT_BUS_URL);
+    if (brokers.length > 0) {
+      app.log.info(`KAFKA_BROKERS/EVENT_BUS_URL set; wiring KafkaBus (${brokers.join(",")})`);
+      const bus = new KafkaBus({ brokers });
       await consumer.replaceBus(bus);
-      await consumer.start();
-    } else if (process.env.EVENT_BUS_URL) {
-      app.log.info("EVENT_BUS_URL set; real event bus client not yet wired — keeping in-memory bus");
       await consumer.start();
     } else if (!devMode) {
       app.log.error("EVENT_BUS_URL (or KAFKA_BROKERS) required in production mode; in-memory bus is not safe for production");
